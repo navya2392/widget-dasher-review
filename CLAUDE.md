@@ -77,6 +77,10 @@ Dasher-level (filter `ASAP == 1` FIRST, then group by [MARKET_NAME, DASHER]):
   + 10·arrival_share`.
 - Gates: vehicle set contains car or motorcycle · lifetime ≥ 100 (Dashattan) / 300
   (Doorlanta) · asap_n ≥ 5 / 10 · fraud flags > 0 → tag `fraud_review` (never exclude).
+  Strategy note (changes no computation): the vehicle gate is a CONDITIONAL capability
+  gate — cars presumed satchel-ready; bicycles conditional on a cargo-satchel fit pilot
+  at onboarding. All metrics, gates, and tiers compute exactly as specified above; the
+  conditional reading is a selection layer on top of the same scorecard.
 - Tiers among gate-passers per market: Tier 1 = top 4 (Dashattan) / top 10 (Doorlanta)
   by score; remainder Tier 2 (activation floor 75 — display only).
 
@@ -117,8 +121,18 @@ Implement the Dasher-level spec above from THIS FILE (do not port other code). D
 result against `reference/dasher_scorecard.csv` on: gate pass/fail, each component,
 score (±0.1), tier. Write a small assert-based test cell that re-checks the diff, so
 later changes can't silently alter scores. Show KC, Josh, and Bret traced end-to-end.
+Also in Phase 3:
+- Conditional bike cohort view cell: Dashers failing ONLY the vehicle gate (bicycle)
+  but meeting their market's lifetime and asap_n thresholds, ranked by score, top 4
+  highlighted. Expect Ron, Zak, Bunje, Rojan (scores ~91–97). Display-only; the
+  reference diff is unaffected.
+- Uniform-strict reconciliation (moved here from Phase 2; the registry omitted the
+  definition): widget-capable vehicle AND lifetime ≥ 300 AND asap_n ≥ 10 AND
+  severe-late rate ≤ 10% AND adjusted on-time ≥ 85%, with missing severe-late treated
+  as fail and missing on-time as 0. Expect 1 (Dashattan) / 8 (Doorlanta).
 **Export:** `export_03_scorecard.xlsx` adds sheet `dasher_scorecard`.
-**Acceptance:** scorecard diff clean; test cell passes.
+**Acceptance:** scorecard diff clean; test cell passes; conditional cohort shown;
+uniform-strict reconciles to 1/8 or is flagged with diagnosis.
 **Commit:** `phase 3: scoring matches reference scorecard`
 
 ### Phase 4 — Exploratory sweep (timeboxed)
