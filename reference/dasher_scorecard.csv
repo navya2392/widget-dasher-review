@@ -1,0 +1,55 @@
+MARKET_NAME,DASHER,lifetime_deliveries,lifetime_star,sample_deliveries,fraud_flags,vehicles,arrival_logged,asap_n,ontime_raw,ontime_adj,severe_late_rate,shrunk_rating,widget_capable,pts_reliability,pts_quality,pts_consistency,pts_professionalism,selection_score,passes_gates,fraud_review,tier,selected_uniform_strict
+Dashattan,Arya,1599.0,4.17,75,1.0,bicycle,0.84,74,0.77,0.784,0.108,4.204,False,39.189,25.221,6.396,8.4,79.207,False,True,,False
+Dashattan,Awstin,1403.0,4.5,8,0.0,bicycle,0.875,8,0.75,0.875,0.0,4.496,False,43.75,26.979,10.0,8.75,89.479,False,False,,False
+Dashattan,Barry,418.0,4.72,3,0.0,bicycle,1.0,3,1.0,1.0,0.0,4.64,False,50.0,27.838,10.0,10.0,97.838,False,False,,False
+Dashattan,Bill,435.0,4.46,8,0.0,car,1.0,8,0.625,0.75,0.125,4.464,True,37.5,26.782,5.833,10.0,80.115,True,False,Tier 1,False
+Dashattan,Bret,773.0,3.82,22,1.0,car,1.0,17,0.353,0.529,0.294,3.954,True,26.471,23.724,0.196,10.0,60.39,True,True,Tier 2,False
+Dashattan,Brian,2902.0,4.81,3,0.0,bicycle,0.667,2,1.0,1.0,0.0,4.788,False,50.0,28.729,10.0,6.667,95.396,False,False,,False
+Dashattan,Bunje,1579.0,4.7,43,1.0,bicycle,1.0,39,0.897,0.949,0.0,4.674,False,47.436,28.046,10.0,10.0,95.482,False,True,,False
+Dashattan,Carlee,895.0,4.52,7,0.0,car,1.0,6,0.667,0.667,0.0,4.511,True,33.333,27.067,10.0,10.0,80.4,True,False,Tier 1,False
+Dashattan,Cass,248.0,4.505,3,0.0,bicycle,1.0,3,1.0,1.0,0.0,4.49,False,50.0,26.942,10.0,10.0,96.942,False,False,,False
+Dashattan,Dave,142.0,4.537,3,0.0,bicycle,1.0,3,0.333,0.667,0.0,4.499,False,33.333,26.993,10.0,10.0,80.326,False,False,,False
+Dashattan,Eddy,290.0,4.44,1,0.0,car,1.0,1,0.0,0.0,1.0,4.453,True,0.0,26.718,0.0,10.0,36.718,False,False,,False
+Dashattan,Etan,228.0,4.351,10,0.0,bicycle,1.0,8,0.625,0.75,0.0,4.407,False,37.5,26.445,10.0,10.0,83.945,False,False,,False
+Dashattan,J,1027.0,4.6,32,0.0,bicycle,0.938,32,0.656,0.781,0.031,4.579,False,39.062,27.475,8.958,9.375,84.87,False,False,,False
+Dashattan,Jennifer,435.0,4.53,1,0.0,car,0.0,1,0.0,0.0,1.0,4.512,True,0.0,27.07,0.0,0.0,27.07,False,False,,False
+Dashattan,Jim,65.0,4.438,3,0.0,bicycle,1.0,2,0.5,1.0,0.0,4.463,False,50.0,26.78,10.0,10.0,96.78,False,False,,False
+Dashattan,KC,6580.0,4.54,143,2.0,car,0.937,138,0.891,0.928,0.014,4.538,True,46.377,27.228,9.517,9.371,92.492,True,True,Tier 1,True
+Dashattan,Mike,736.0,4.63,27,0.0,bicycle,0.889,27,0.778,0.815,0.074,4.596,False,40.741,27.577,7.531,8.889,84.738,False,False,,False
+Dashattan,Rachael,278.0,4.47,10,0.0,bicycle,1.0,6,0.833,0.833,0.167,4.471,False,41.667,26.824,4.444,10.0,82.935,False,False,,False
+Dashattan,Rich,500.0,4.26,1,0.0,car,1.0,1,1.0,1.0,0.0,4.32,True,50.0,25.923,10.0,10.0,95.923,False,False,,False
+Dashattan,Rojan,788.0,4.58,68,0.0,bicycle,0.897,62,0.871,0.919,0.032,4.558,False,45.968,27.348,8.925,8.971,91.212,False,False,,False
+Dashattan,Ron,2618.0,4.56,26,0.0,bicycle,0.962,24,0.917,1.0,0.0,4.554,False,50.0,27.322,10.0,9.615,96.938,False,False,,False
+Dashattan,Samm,1721.0,4.03,48,1.0,car,0.958,44,0.795,0.841,0.045,4.076,True,42.045,24.456,8.485,9.583,84.57,True,True,Tier 1,False
+Dashattan,Sean,522.0,4.52,49,0.0,bicycle,0.959,44,0.864,0.864,0.045,4.507,False,43.182,27.04,8.485,9.592,88.298,False,False,,False
+Dashattan,Zak,905.0,4.63,6,0.0,bicycle,0.833,6,1.0,1.0,0.0,4.601,False,50.0,27.608,10.0,8.333,95.941,False,False,,False
+Doorlanta,Abhai,947.0,4.56,34,0.0,car,0.824,33,0.909,0.909,0.0,4.565,True,45.455,27.389,10.0,8.235,91.079,True,False,Tier 1,True
+Doorlanta,Ajay,726.0,4.57,11,0.0,car,1.0,11,1.0,1.0,0.0,4.574,True,50.0,27.443,10.0,10.0,97.443,True,False,Tier 1,True
+Doorlanta,Andy,211.0,4.5,8,0.0,car,1.0,8,1.0,1.0,0.0,4.543,True,50.0,27.256,10.0,10.0,97.256,False,False,,False
+Doorlanta,Anisha,931.0,4.7,13,0.0,car,0.846,13,0.846,0.846,0.0,4.68,True,42.308,28.081,10.0,8.462,88.85,True,False,Tier 1,False
+Doorlanta,Ash,398.0,4.66,16,0.0,car,0.875,12,0.667,0.75,0.0,4.636,True,37.5,27.815,10.0,8.75,84.065,True,False,Tier 2,False
+Doorlanta,Benn,995.0,4.63,9,0.0,car,0.889,9,0.889,0.889,0.0,4.623,True,44.444,27.737,10.0,8.889,91.071,False,False,,False
+Doorlanta,Carol,171.0,4.452,5,0.0,car,1.0,5,0.8,0.8,0.2,4.525,True,40.0,27.151,3.333,10.0,80.484,False,False,,False
+Doorlanta,Cate,7039.0,4.49,72,0.0,car,0.681,70,0.857,0.886,0.043,4.493,True,44.286,26.956,8.571,6.806,86.619,True,False,Tier 1,True
+Doorlanta,Codee,198.0,4.367,5,0.0,car,1.0,5,1.0,1.0,0.0,4.478,True,50.0,26.867,10.0,10.0,96.867,False,False,,False
+Doorlanta,Drew,611.0,4.79,4,0.0,car,1.0,4,1.0,1.0,0.0,4.74,True,50.0,28.44,10.0,10.0,98.44,False,False,,False
+Doorlanta,Eliot,206.0,4.571,3,0.0,car,1.0,3,1.0,1.0,0.0,4.579,True,50.0,27.476,10.0,10.0,97.476,False,False,,False
+Doorlanta,Elon,604.0,4.62,82,0.0,car,0.878,76,0.934,0.947,0.0,4.612,True,47.368,27.672,10.0,8.78,93.82,True,False,Tier 1,True
+Doorlanta,Erinn,219.0,4.376,3,0.0,car,1.0,2,0.5,1.0,0.0,4.477,True,50.0,26.863,10.0,10.0,96.863,False,False,,False
+Doorlanta,Faud,258.0,4.69,6,1.0,car,1.0,6,1.0,1.0,0.0,4.645,True,50.0,27.872,10.0,10.0,97.872,False,True,,False
+Doorlanta,Gabby,56.0,4.478,1,0.0,car,1.0,1,1.0,1.0,0.0,4.564,True,50.0,27.382,10.0,10.0,97.382,False,False,,False
+Doorlanta,Hanna,2899.0,4.79,42,1.0,car,0.929,39,0.872,0.872,0.026,4.777,True,43.59,28.662,9.145,9.286,90.682,True,True,Tier 1,True
+Doorlanta,Hersh,624.0,4.7,26,0.0,car,0.923,25,0.72,0.8,0.08,4.673,True,40.0,28.036,7.333,9.231,84.6,True,False,Tier 1,False
+Doorlanta,Jagar,5138.0,4.89,50,0.0,car,0.88,46,0.957,0.957,0.022,4.879,True,47.826,29.272,9.275,8.8,95.173,True,False,Tier 1,True
+Doorlanta,Jarry,198.0,4.721,3,0.0,car,1.0,3,1.0,1.0,0.0,4.654,True,50.0,27.922,10.0,10.0,97.922,False,False,,False
+Doorlanta,Jhordan,20.0,5.0,3,0.0,car,1.0,3,1.0,1.0,0.0,4.625,True,50.0,27.75,10.0,10.0,97.75,False,False,,False
+Doorlanta,Joe,626.0,4.38,34,0.0,car,1.0,33,0.758,0.788,0.061,4.43,True,39.394,26.582,7.98,10.0,83.955,True,False,Tier 2,False
+Doorlanta,Josh,1226.0,4.77,21,0.0,car,0.952,20,0.8,0.95,0.0,4.744,True,47.5,28.466,10.0,9.524,95.49,True,False,Tier 1,True
+Doorlanta,Katelynn,3264.0,4.7,64,1.0,car,0.781,61,0.902,0.902,0.016,4.694,True,45.082,28.161,9.454,7.812,90.509,True,True,Tier 1,True
+Doorlanta,Kev,144.0,4.741,3,0.0,car,1.0,3,1.0,1.0,0.0,4.652,True,50.0,27.91,10.0,10.0,97.91,False,False,,False
+Doorlanta,Lauran,4836.0,4.42,17,0.0,car/motorcycle,0.706,15,0.733,0.733,0.0,4.427,True,36.667,26.56,10.0,7.059,80.285,True,False,Tier 2,False
+Doorlanta,Mary,32.0,4.389,1,0.0,car,1.0,1,1.0,1.0,0.0,4.56,True,50.0,27.361,10.0,10.0,97.361,False,False,,False
+Doorlanta,Matt,4625.0,4.22,19,0.0,car,0.842,17,0.588,0.588,0.118,4.235,True,29.412,25.411,6.078,8.421,69.323,True,False,Tier 2,False
+Doorlanta,Matthew,223.0,4.411,20,0.0,car,0.9,19,0.789,0.842,0.158,4.495,True,42.105,26.967,4.737,9.0,82.809,False,False,,False
+Doorlanta,Merissa,2371.0,4.58,19,0.0,car,0.947,19,0.579,0.789,0.158,4.581,True,39.474,27.484,4.737,9.474,81.168,True,False,Tier 2,False
+Doorlanta,Sal,779.0,4.46,6,0.0,car,0.833,5,0.4,0.4,0.4,4.486,True,20.0,26.916,0.0,8.333,55.25,False,False,,False
