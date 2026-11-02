@@ -172,3 +172,38 @@ cell reference that produced it.
   the only answer key. The deck is the thing being validated, not a source.
 - Do not write any narrative claiming a recommendation — recommendations live in the
   deck and belong to the human.
+
+### Phase 7 — Pipeline refactor (after Phase 5; ask before starting)
+Extract the notebook's logic into modules, no logic changes:
+```
+pipeline/cleaning.py   ← junk rows, phantom column, timestamps, derived fields 1–10
+pipeline/qa.py         ← deterministic profiling (nulls, ranges, schema vs expected)
+pipeline/scoring.py    ← dasher aggregates, gates, components, score, tiers
+pipeline/briefing.py   ← run-over-run diff computation
+run_pipeline.py        ← CLI: python run_pipeline.py <xlsx> → outputs/ (QA report,
+                         scorecard.csv, tiers, briefing.md, excel export)
+```
+**Lock:** pipeline/scoring.py output must pass the same assert-vs-reference test as §5.
+Add tests/test_scoring.py running that check standalone.
+**AI stages:** qa.py and briefing.py each end with one Anthropic API call (model:
+claude-sonnet, key from .env via python-dotenv), system prompts loaded from
+prompts/qa_system.md and prompts/briefing_system.md — never inline. Hard constraints
+in those files are non-negotiable: QA never invents statistics not in the profile;
+briefing reports only numbers present in its input. Both calls wrapped in try/except —
+on API failure, write the deterministic outputs and an "AI summary unavailable" note;
+the pipeline never fails because the AI call did.
+**Demo prior run:** scripts/make_prior_run.py creates a labelled, perturbed copy of the
+scorecard ("simulated prior week — demo only") so the briefing's diff has something
+to diff against.
+**Acceptance:** one command produces all outputs on the case xlsx; lock test passes;
+pipeline runs to completion with no API key present (degraded mode).
+**Commit:** `phase 7: pipeline refactor + AI stages`
+
+### Phase 8 — Streamlit demo (after Phase 7)
+app.py imports pipeline/ (no logic in the app). Single page, four blocks:
+upload xlsx → run; QA report (AI text + the profile table); scorecard (sortable,
+fraud_review and tier visible, conditional bike cohort shown separately); briefing +
+an "Approve tier changes" button that writes approved_tiers.csv with a timestamp —
+the human gate, visible. Run instructions in README. No styling beyond defaults.
+**Acceptance:** `streamlit run app.py` works from a fresh venv per README.
+**Commit:** `phase 8: streamlit review app`
