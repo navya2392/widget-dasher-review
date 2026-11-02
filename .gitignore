@@ -5,3 +5,4 @@ __pycache__/
 export_*.xlsx
 *.pyc
 .DS_Store
+analysis_report.pdf

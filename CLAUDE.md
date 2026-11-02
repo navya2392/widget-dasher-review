@@ -103,7 +103,13 @@ Recompute every statistic in `reference/KEY_NUMBERS.md`. Produce a reconciliatio
 in the notebook: metric | expected | computed | match. For any mismatch, diagnose the
 definition difference and REPORT it; do not adjust definitions without approval.
 **Export:** `export_02_reconciled.xlsx` adds sheet `city_summary`.
-**Acceptance:** every KEY_NUMBERS stat matched or explicitly flagged with diagnosis.
+**Acceptance:** every KEY_NUMBERS stat matched or explicitly flagged with diagnosis, AND
+the notebook's pre-scoring sections (Cleaning, Verification, Market comparison,
+Measurement) are complete, narrated, and run clean top-to-bottom (Restart & Run All).
+**HARD GATE:** this stop is the human's pre-scoring review of the full notebook. Present
+a short reading guide (which cells show the cleaning log, the row-930 check, the
+reconciliation table, the market/measurement analysis). Do not begin Phase 3 until the
+human explicitly confirms they have reviewed the notebook.
 **Commit:** `phase 2: reconciliation vs KEY_NUMBERS`
 
 ### Phase 3 — Scoring
