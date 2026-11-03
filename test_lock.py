@@ -3,6 +3,8 @@ must still reproduce the baseline and its two one-swap scenarios when pointed at
 
 Run:  .venv\\Scripts\\python -m pytest test_lock.py -v
 """
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -19,6 +21,8 @@ EXACT_COLS = ["lifetime_deliveries", "sample_deliveries", "fraud_flags", "asap_n
 
 @pytest.fixture(scope="module")
 def result():
+    if not Path(REFERENCE).exists():
+        pytest.skip("reference/dasher_scorecard.csv is kept out of the repository; the lock runs where the answer key exists")
     return pipeline.run(XLSX)
 
 
