@@ -202,6 +202,34 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     approval_frame["Tier"] = [overrides.get(d, r) for d, r in zip(full_view["Dasher"], full_view["Recommended"])]
     approval_frame["Review"] = full_view["Review"].values
     st.session_state[f"edited_{market}"] = approval_frame.assign(MARKET_NAME=market)
+    # read-only: Dashers who did not clear the gates (cannot be approved), with the gate(s) they failed
+    non = scorecard[(scorecard["MARKET_NAME"] == market) & ~scorecard["passes_gates"]].sort_values("selection_score", ascending=False)
+    if len(non):
+        def failed_gates(r):
+            out = []
+            if not r["widget_capable"]: out.append("vehicle")
+            if r["lifetime_deliveries"] < pipeline.GATE_LIFETIME_MIN[market]: out.append(f"lifetime < {pipeline.GATE_LIFETIME_MIN[market]}")
+            if (r["asap_n"] if pd.notna(r["asap_n"]) else 0) < pipeline.GATE_ASAP_MIN[market]: out.append(f"ASAP < {pipeline.GATE_ASAP_MIN[market]}")
+            return ", ".join(out)
+        non_view = pd.DataFrame({
+            "Dasher": non["DASHER"].values,
+            "Score": non["selection_score"].round(1).values,
+            "Failed gate(s)": [failed_gates(r) for _, r in non.iterrows()],
+            "Review": ["⚠️ review" if f else "" for f in non["fraud_review"]],
+            "Deliveries": non["sample_deliveries"].astype(int).values,
+            "ASAP n": non["asap_n"].fillna(0).astype(int).values,
+            "Lifetime deliv.": non["lifetime_deliveries"].astype(int).values,
+            "Lifetime rating": non["lifetime_star"].round(2).values,
+            "Shrunk rating": non["shrunk_rating"].round(2).values,
+            "On-time adj %": (100 * non["ontime_adj"]).round(1).values,
+            "Severe %": (100 * non["severe_late_rate"]).round(1).values,
+            "Logged %": (100 * non["arrival_logged"]).round(1).values,
+            "Vehicle": non["vehicles"].values,
+        })
+        st.markdown(f"#### ○ Did not clear gates &nbsp; <span style='color:gray;font-weight:normal'>{len(non)} Dashers · "
+                    "read-only, not eligible for approval</span>", unsafe_allow_html=True)
+        non_config = dict(config); non_config["Failed gate(s)"] = st.column_config.TextColumn("Failed gate(s)", width=150)
+        st.dataframe(non_view, column_config=non_config, hide_index=True, width="stretch", height=35 * (len(non_view) + 1) + 3)
     st.toggle("Show score components", key=f"components_{market}")
 
 
