@@ -169,7 +169,7 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
         "Recommended": st.column_config.TextColumn("Recommended", width="small", help="Pipeline tier (read-only)"),
         "Override": st.column_config.SelectboxColumn("Override", options=pipeline.TIER_OPTIONS, required=True,
                                                           width="small", help="Operator's decision — change to override"),
-        "Review": st.column_config.TextColumn("Review", width="small",
+        "Review": st.column_config.TextColumn("Fraud review", width="small",
                                               help="⚠️ = fraud flag in sample → manual review, never auto-excluded"),
         "Vehicle": st.column_config.TextColumn("Vehicle", width="small"),
     }
@@ -180,11 +180,12 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     for label in ("On-time adj %", "Severe %", "Logged %") + tuple(COMPONENT_COLUMNS):
         config[label] = st.column_config.NumberColumn(label, format="%.1f", width="small")
     overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
-    for tier_label, colour in (("Tier 1", "green"), ("Tier 2", "orange")):      # one coloured section per recommended tier
+    for tier_label, colour in (("Tier 1", "red"), ("Tier 2", None)):         # Tier 1 red, Tier 2 black
         section = view[view["Recommended"] == tier_label].reset_index(drop=True)
         if section.empty:
             continue
-        st.markdown(f"#### :{colour}[● {tier_label} — recommended] &nbsp; <span style='color:gray;font-weight:normal'>"
+        head = f":{colour}[● {tier_label} — recommended]" if colour else f"● {tier_label} — recommended"
+        st.markdown(f"#### {head} &nbsp; <span style='color:gray;font-weight:normal'>"
                     f"{len(section)} Dasher{'s' if len(section) != 1 else ''}</span>", unsafe_allow_html=True)
         shown = section.drop(columns=["Recommended", ""])          # recommendation stays in the data for the approval log
         edited = st.data_editor(shown, column_config=config,
@@ -250,12 +251,11 @@ tab_score, tab_data, tab_changes = st.tabs(["📊 Scorecard", "🧪 Data check",
 
 # ----------------------------------------------------------------------------- scorecard (first)
 with tab_score:
-    CITY_STYLE = {"Dashattan": ("red", "🏙️"), "Doorlanta": ("blue", "🌆")}
-    city_tabs = st.tabs([f":{CITY_STYLE[m][0]}[**{CITY_STYLE[m][1]} {m.upper()}**]" for m in MARKETS])   # one city at a time
+    CITY_COLOUR = {"Dashattan": "red", "Doorlanta": None}            # two colours only: red and (default) black
+    city_tabs = st.tabs([f":red[**{m.upper()}**]" if CITY_COLOUR[m] else f"**{m.upper()}**" for m in MARKETS])
     for city_tab, market in zip(city_tabs, MARKETS):
         with city_tab:
-            colour, icon = CITY_STYLE[market]
-            st.markdown(f"## :{colour}[{icon} {market.upper()}]")
+            st.markdown(f"## :red[{market.upper()}]" if CITY_COLOUR[market] else f"## {market.upper()}")
             render_market(scorecard, market)
             cohort = pipeline.bike_cohort(scorecard)
             cohort = cohort[cohort["MARKET_NAME"] == market]
