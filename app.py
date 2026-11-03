@@ -91,7 +91,7 @@ def profile_facts(p: dict) -> pd.DataFrame:
         ("fraud-flagged rows", p["fraud_flagged_rows"]),
         ("standing exclusions", ", ".join(p["standing_exclusions"])),
     ]
-    return pd.DataFrame(rows, columns=["fact", "value"]).set_index("fact")
+    return pd.DataFrame(rows, columns=["fact", "value"]).astype({"value": str}).set_index("fact")   # one dtype: Arrow-clean
 
 
 def ai_panel(label: str, text: str | None, error: str | None) -> None:
@@ -142,7 +142,7 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     for label in list(COMPONENT_COLUMNS) + list(INPUT_COLUMNS):
         config[label] = st.column_config.NumberColumn(label, format="%.1f")
     edited = st.data_editor(view, column_config=config, disabled=[c for c in view.columns if c != "Tier"],
-                            hide_index=True, use_container_width=True,
+                            hide_index=True, width="stretch",
                             height=35 * (len(view) + 1) + 3,          # show every gate-passer without an inner scrollbar
                             key=f"editor_{market}_{'full' if show else 'compact'}")
     st.session_state[f"tier_override_{market}"] = dict(zip(edited["Dasher"], edited["Tier"]))
@@ -199,12 +199,12 @@ with tab_score:
         if len(cohort):
             with st.expander("Conditional bike cohort — Dashattan (display only; fails only the vehicle gate)"):
                 st.dataframe(cohort[["DASHER", "vehicles", "lifetime_deliveries", "asap_n", "ontime_adj", "shrunk_rating",
-                                     "selection_score", "fraud_review", "top_4"]].round(3), hide_index=True, use_container_width=True)
+                                     "selection_score", "fraud_review", "top_4"]].round(3), hide_index=True, width="stretch")
     with right:
         render_market(scorecard, "Doorlanta")
     st.write("")
     _, mid, _ = st.columns([2, 1, 2])
-    if mid.button("Approve tier changes", use_container_width=True):
+    if mid.button("Approve tier changes", width="stretch"):
         approve(run["source"])
     if "approved" in st.session_state:
         stamp, n, m = st.session_state["approved"]
@@ -230,9 +230,9 @@ with tab_changes:
         m3.metric("Tier changes", len(d["tier_changes"]))
         st.subheader("Tier changes (recommendations pending approval)")
         changes = pd.DataFrame(d["tier_changes"]) if d["tier_changes"] else pd.DataFrame({"tier changes": ["none"]})
-        st.dataframe(changes.round(1), hide_index=True, use_container_width=True)
+        st.dataframe(changes.round(1), hide_index=True, width="stretch")
         st.subheader("Largest score movers")
-        st.dataframe(pd.DataFrame(d["score_movers"]).round(1), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(d["score_movers"]).round(1), hide_index=True, width="stretch")
         if d["new_dashers"] or d["dropped_dashers"]:
             st.write("New:", d["new_dashers"] or "none", " · Dropped:", d["dropped_dashers"] or "none")
         ai_panel("AI briefing", run["briefing"], run["briefing_error"])
