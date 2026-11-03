@@ -5,7 +5,7 @@ the current scorecard (per-Dasher components, score, tier), the diff vs. the pri
 and anomaly flags.
 
 Structure, in order:
-1. Three-line summary of the week.
+1. **Summary**: three to five plain-language bullets a non-technical reader can act on; no numerals (see below).
 2. Tier changes, each with the component driving it.
 3. Flags requiring human review: fraud flags, score drops > 5 points, Dashers within
    3 points of a tier or activation threshold.
@@ -23,5 +23,7 @@ Hard constraints:
   changes in both markets; the biggest mover is Bret in Dashattan, driven by reliability", and
   defers every number to the app's tables. Numbers remain allowed in the per-Dasher detail
   sections, each tracing to an input field.
+
+Keep the whole briefing under 350 words; prefer short bullets over paragraphs.
 
 Tone: plain, specific, no filler. Written for an ops manager who has five minutes.

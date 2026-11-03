@@ -129,7 +129,9 @@ def profile_facts(p: dict) -> pd.DataFrame:
 
 
 def ai_panel(label: str, text: str | None, error: str | None) -> None:
-    with st.expander(label):
+    """AI commentary, shown open at the top of its tab; the numbers below it come from the pipeline, never from this text."""
+    st.subheader(label)
+    with st.container(border=True):
         if text:
             st.markdown(text)
         else:
@@ -330,17 +332,24 @@ with tab_score:
 
 # ----------------------------------------------------------------------------- data check
 with tab_data:
+    ai_panel("AI read of the data", run["qa"], run["qa_error"])
+    st.subheader("Data profile (computed)")
     st.table(profile_facts(run["profile"]))
     with st.expander("Cleaning log"):
         for line in run["cleaning_log"]:
             st.markdown(f"- {line}")
-    ai_panel("AI read of the data", run["qa"], run["qa_error"])
 
 # ----------------------------------------------------------------------------- changes vs prior
 with tab_changes:
     if run["prior"] is None:
         st.info("No prior run given (upload one, or use the demo data, which includes a labelled prior).")
     else:
+        if run["source"].startswith("demo"):
+            st.info("The prior run here is a **simulated prior week** (`demo/prior_scorecard.csv`), perturbed on purpose so the "
+                    "comparison has something to show. The delivery data itself did not change — the tier movements below are "
+                    "the demo's doing, not the Dashers'.")
+        ai_panel("AI briefing", run["briefing"], run["briefing_error"])
+        st.subheader("Changes (computed)")
         d = run["diff"]
         m1, m2, m3 = st.columns(3)
         m1.metric("Gate-passers now", ", ".join(f"{k} {v}" for k, v in d["gate_passers_now"].items()))
@@ -353,4 +362,3 @@ with tab_changes:
         st.dataframe(pd.DataFrame(d["score_movers"]).round(1), hide_index=True, width="stretch")
         if d["new_dashers"] or d["dropped_dashers"]:
             st.write("New:", d["new_dashers"] or "none", " · Dropped:", d["dropped_dashers"] or "none")
-        ai_panel("AI briefing", run["briefing"], run["briefing_error"])

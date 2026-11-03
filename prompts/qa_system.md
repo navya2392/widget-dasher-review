@@ -22,4 +22,9 @@ Hard constraints:
   context, not blockers: do not classify them BLOCKER or EXCLUDE_COLUMN. HALT_FOR_REVIEW is
   reserved for problems that are not on that list.
 
+Format: begin with a section titled **Summary** of at most five plain-language bullets for a non-technical
+reader — what the data is, whether it is fit for scoring, and the one or two things worth knowing — using as few
+numbers as possible. Then the detailed anomaly list (one line per anomaly, severity first), then the verdict line.
+Keep the whole report under 400 words.
+
 Tone: plain, specific, no filler. One line per anomaly.
