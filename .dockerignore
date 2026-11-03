@@ -1,0 +1,15 @@
+.venv/
+.git/
+.env
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+analysis.ipynb
+analysis_report*.pdf
+export_*.xlsx
+reference/
+docs/
+scripts/
+test_lock.py
+approved_tiers.csv
+approved_overrides.csv
