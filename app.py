@@ -8,6 +8,7 @@ gate-passer's tier before approving; every override is recorded next to the reco
 Run:  streamlit run app.py
 """
 import datetime as dt
+import io
 import os
 from pathlib import Path
 
@@ -41,8 +42,12 @@ def ensure_api_key() -> None:
         pass
 
 
-def run_everything(raw: pd.DataFrame, prior: pd.DataFrame | None, source: str) -> dict:
-    """One pipeline run plus at most one call per AI function. Stored in session state so reruns don't re-call."""
+@st.cache_data(show_spinner=False)
+def cached_run(raw_bytes: bytes, prior_bytes: bytes | None, source: str) -> dict:
+    """One pipeline run plus at most one call per AI function, cached on the input bytes: the first session to
+    run a given workbook pays once per server process; every later session (and every rerun) gets it instantly."""
+    raw = pd.read_excel(io.BytesIO(raw_bytes))
+    prior = pd.read_csv(io.BytesIO(prior_bytes)) if prior_bytes else None
     result = pipeline.run_raw(raw)
     ensure_api_key()
     qa = ai.qa_summary(result["profile"])
@@ -54,13 +59,18 @@ def run_everything(raw: pd.DataFrame, prior: pd.DataFrame | None, source: str) -
         qa_note = verdict[-1] if verdict else ("QA report truncated before its verdict" if qa else None)
         briefing = ai.briefing(result["scorecard"], prior, qa_note=qa_note)
         briefing_error = ai.last_error
-    for market in MARKETS:                       # a new run resets any operator overrides
-        st.session_state.pop(f"tier_override_{market}", None)
-        st.session_state.pop(f"edited_{market}", None)
-    st.session_state.pop("approved", None)
     return {**result, "prior": prior, "diff": diff, "qa": qa, "qa_error": qa_error,
             "briefing": briefing, "briefing_error": briefing_error, "source": source,
             "ran_at": dt.datetime.now().isoformat(timespec="seconds")}
+
+
+def run_everything(raw_bytes: bytes, prior_bytes: bytes | None, source: str) -> dict:
+    """Session-side wrapper: resets any operator overrides, then returns the (cached) run."""
+    for market in MARKETS:
+        st.session_state.pop(f"tier_override_{market}", None)
+        st.session_state.pop(f"edited_{market}", None)
+    st.session_state.pop("approved", None)
+    return cached_run(raw_bytes, prior_bytes, source)
 
 
 def profile_facts(p: dict) -> pd.DataFrame:
@@ -161,14 +171,14 @@ st.caption("AI interprets and explains; code computes; a human approves.")
 upload = st.file_uploader("Deliveries workbook (.xlsx)", type=["xlsx"])
 prior_upload = st.file_uploader("Prior run scorecard (.csv, optional)", type=["csv"])
 col_run, col_demo = st.columns(2)
+demo_prior_bytes = DEMO_PRIOR.read_bytes() if DEMO_PRIOR.exists() else None
 if col_run.button("Run", disabled=upload is None):
-    prior = pd.read_csv(prior_upload) if prior_upload is not None else (pd.read_csv(DEMO_PRIOR) if DEMO_PRIOR.exists() else None)
+    prior_bytes = prior_upload.getvalue() if prior_upload is not None else demo_prior_bytes
     with st.spinner("Running pipeline and AI stages..."):
-        st.session_state["run"] = run_everything(pd.read_excel(upload), prior, source=upload.name)
+        st.session_state["run"] = run_everything(upload.getvalue(), prior_bytes, source=upload.name)
 if col_demo.button("Run with demo data"):
-    with st.spinner("Running pipeline and AI stages on the case data..."):
-        st.session_state["run"] = run_everything(pd.read_excel(DEMO_XLSX), pd.read_csv(DEMO_PRIOR) if DEMO_PRIOR.exists() else None,
-                                                 source=f"demo: {DEMO_XLSX.name}")
+    with st.spinner("Running pipeline and AI stages on the case data (cached after the first run)..."):
+        st.session_state["run"] = run_everything(DEMO_XLSX.read_bytes(), demo_prior_bytes, source=f"demo: {DEMO_XLSX.name}")
 
 run = st.session_state.get("run")
 if run is None:

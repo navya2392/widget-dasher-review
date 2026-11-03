@@ -8,3 +8,6 @@ export_*.xlsx
 analysis_report*.pdf
 approved_tiers.csv
 approved_overrides.csv
+# case materials stay local; only the scoring answer key is tracked (test_lock.py reads it)
+reference/*
+!reference/dasher_scorecard.csv
