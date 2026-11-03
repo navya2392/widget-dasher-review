@@ -168,11 +168,18 @@ st.set_page_config(page_title="Widget Dasher Review", layout="wide")
 st.title("Widget Dasher Review")
 st.caption("AI interprets and explains; code computes; a human approves.")
 
-upload = st.file_uploader("Deliveries workbook (.xlsx)", type=["xlsx"])
-prior_upload = st.file_uploader("Prior run scorecard (.csv, optional)", type=["csv"])
-col_run, col_demo = st.columns(2)
+# The uploader widgets render only on request: Streamlit Community Cloud intermittently answers HTTP 500 for the
+# uploader's JavaScript chunk on first-time visits, which left error boxes where the uploaders should be. The demo
+# button needs nothing from that chunk, so it is the front door.
+col_demo, col_own = st.columns(2)
+want_upload = col_own.toggle("Upload my own files", value=False)
+upload = prior_upload = None
+if want_upload:
+    upload = st.file_uploader("Deliveries workbook (.xlsx)", type=["xlsx"])
+    prior_upload = st.file_uploader("Prior run scorecard (.csv, optional)", type=["csv"])
+col_run = st.container()
 demo_prior_bytes = DEMO_PRIOR.read_bytes() if DEMO_PRIOR.exists() else None
-if col_run.button("Run", disabled=upload is None):
+if want_upload and col_run.button("Run", disabled=upload is None):
     prior_bytes = prior_upload.getvalue() if prior_upload is not None else demo_prior_bytes
     with st.spinner("Running pipeline and AI stages..."):
         st.session_state["run"] = run_everything(upload.getvalue(), prior_bytes, source=upload.name)
