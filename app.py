@@ -164,8 +164,8 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
                "then Approve below")
     config = {
         "": st.column_config.TextColumn("", width="small"),
-        "Dasher": st.column_config.TextColumn("Dasher", width=95),
-        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f", width=130),
+        "Dasher": st.column_config.TextColumn("Dasher", width=88),
+        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f", width=112),
         "Recommended": st.column_config.TextColumn("Recommended", width=85, help="Pipeline tier (read-only)"),
         "Override": st.column_config.SelectboxColumn("Override", options=pipeline.TIER_OPTIONS, required=True,
                                                      width=90, help="Operator's decision — change to override"),
@@ -174,8 +174,8 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
         "Vehicle": st.column_config.TextColumn("Vehicle", width=85),
     }
     # pixel widths + short labels so all columns fit a laptop screen; the data column names are unchanged
-    for col, label in (("Deliveries", "Deliv."), ("ASAP n", "ASAP n"), ("Lifetime deliv.", "Lifetime n")):
-        config[col] = st.column_config.NumberColumn(label, format="%d", width=72)
+    for col, label, w in (("Deliveries", "Deliveries", 92), ("ASAP n", "ASAP deliveries", 118), ("Lifetime deliv.", "Lifetime deliveries", 132)):
+        config[col] = st.column_config.NumberColumn(label, format="%d", width=w)
     for col, label in (("Lifetime rating", "Lifetime ★"), ("Shrunk rating", "Shrunk ★")):
         config[col] = st.column_config.NumberColumn(label, format="%.2f", width=78)
     for col, label in (("On-time adj %", "On-time %"), ("Severe %", "Severe %"), ("Logged %", "Logged %")):
