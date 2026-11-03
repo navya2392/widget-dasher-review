@@ -258,6 +258,7 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
                                 key=f"{key}_{'full' if show else 'compact'}_{abs(hash(tuple(shown['Dasher'])))}")
         overrides.update(zip(edited["Dasher"], edited["Override"]))
 
+    st.caption("Override column is editable — change a tier there, then Approve below.")
     for tier_label, colour in (("Tier 1", "red"), ("Tier 2", None), ("Excluded", "gray")):   # Tier 1 red, Tier 2 black
         section = view[view["Current"] == tier_label].reset_index(drop=True)
         if section.empty:
@@ -301,6 +302,18 @@ st.set_page_config(page_title="Widget Dasher Review", page_icon="📦", layout="
 st.markdown("<style>.block-container{padding-top:1.5rem;padding-bottom:2rem}</style>", unsafe_allow_html=True)  # trim the empty band above the title
 st.title("📦 Widget Dasher Review")
 st.caption("AI interprets and explains; code computes; a human approves.")
+with st.expander("How to use this app (30 seconds)", expanded=st.session_state.get("run") is None):
+    st.markdown(
+        "1. Click **Run with demo data** (or upload a new weekly workbook, plus an optional prior scorecard for comparison).\n"
+        "2. **Scorecard** tab: review each city's tiers. Score bars rank Dashers; *review* marks fraud flags needing a human look. "
+        "Use the filters to slice; toggle **Show score components** to see how each score is built.\n"
+        "3. To override: change any Dasher's value in the **Override** column — move them between Tier 1, Tier 2 and Excluded "
+        "(you can also promote someone who didn't clear the gates). Everything else is locked.\n"
+        "4. Click **Approve tier changes**: your decisions are saved with a timestamp — every override is logged separately. "
+        "The tables regroup to show the approved tiers.\n"
+        "5. **Data check** shows what the pipeline found in the data (with an AI summary); **Changes vs prior run** shows what "
+        "moved since last time (with an AI briefing). Every number comes from code; the AI only explains."
+    )
 
 # The uploader widgets render only on request: Streamlit Community Cloud intermittently answers HTTP 500 for the
 # uploader's JavaScript chunk on first-time visits, which left error boxes where the uploaders should be. The demo
