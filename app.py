@@ -35,7 +35,7 @@ COLUMN_HELP = {  # shown as a ? tooltip on each column header
     "Dasher": "Dasher name.",
     "Score": "0–100 selection score = 50 × adjusted on-time + 30 × shrunk rating / 5 + 10 × consistency (1 − severe-late rate / 30%) + 10 × arrival-logged share.",
     "Recommended": "Tier assigned by the pipeline: Tier 1 = top 4 (Dashattan) / top 10 (Doorlanta) gate-passers by score; others Tier 2.",
-    "Override": "Operator's decision. Change it to override the recommended tier; every override is recorded on Approve.",
+    "Override": "Operator's decision. Change it to override the recommended tier, or promote a Dasher who did not clear the gates; every override is recorded on Approve.",
     "Review": "'review' = at least one fraud flag in this Dasher's deliveries → manual review. Never auto-excluded.",
     "Deliveries": "Deliveries observed in this data extract (June 1–13).",
     "ASAP n": "ASAP (on-demand) deliveries in the extract — the sample the on-time and severe-late rates are computed on.",
@@ -104,6 +104,7 @@ def run_everything(raw_bytes: bytes, prior_bytes: bytes | None, source: str, use
         st.session_state.pop(f"tier_override_{market}", None)
         st.session_state.pop(f"edited_{market}", None)
     st.session_state.pop("approved", None)
+    st.session_state.pop("approved_tiers", None)
     return cached_run(raw_bytes, prior_bytes, source, use_saved_ai)
 
 
@@ -167,38 +168,73 @@ def scorecard_view(scorecard: pd.DataFrame, market: str, show_components: bool) 
 
 
 def render_market(scorecard: pd.DataFrame, market: str) -> None:
-    passers = scorecard[(scorecard["MARKET_NAME"] == market) & scorecard["passes_gates"]]
+    city = scorecard[scorecard["MARKET_NAME"] == market]
+    passers = city[city["passes_gates"]]
     m1, m2, m3 = st.columns(3)
-    m1.metric("Gate-passers", int(len(passers)), delta=f"of {int((scorecard['MARKET_NAME'] == market).sum())} Dashers", delta_color="off")
+    m1.metric("Gate-passers", int(len(passers)), delta=f"of {len(city)} Dashers", delta_color="off")
     m2.metric("Tier 1", int((passers["tier"] == "Tier 1").sum()), delta=f"top {pipeline.TIER1_SIZE[market]} by score")
     m3.metric("Fraud reviews", int(passers["fraud_review"].sum()), delta="manual check, never excluded", delta_color="inverse")
     show = st.session_state.get(f"components_{market}", False)
-    full_view = scorecard_view(scorecard, market, show)
+    approved_tiers = st.session_state.get("approved_tiers", {})
+    approved_any = any(k[0] == market for k in approved_tiers)
+    overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
 
-    # filters: display only — Approve always covers every gate-passer, filtered in or out
+    def failed_gates(r):
+        out = []
+        if not r["widget_capable"]:
+            out.append("vehicle")
+        if r["lifetime_deliveries"] < pipeline.GATE_LIFETIME_MIN[market]:
+            out.append(f"lifetime < {pipeline.GATE_LIFETIME_MIN[market]}")
+        if (r["asap_n"] if pd.notna(r["asap_n"]) else 0) < pipeline.GATE_ASAP_MIN[market]:
+            out.append(f"ASAP < {pipeline.GATE_ASAP_MIN[market]}")
+        return ", ".join(out)
+
+    # one view of every Dasher in the city: recommendation ("Not eligible" for non-passers), current tier, override default
+    rows = city.sort_values("selection_score", ascending=False)
+    full_view = pd.DataFrame({
+        "Dasher": rows["DASHER"].values,
+        "Score": rows["selection_score"].round(1).values,
+        "Recommended": [t if p else "Not eligible" for t, p in zip(rows["tier"], rows["passes_gates"])],
+        "Failed gate(s)": [failed_gates(r) if not r["passes_gates"] else "" for _, r in rows.iterrows()],
+        "Review": ["review" if f else "" for f in rows["fraud_review"]],
+        "Deliveries": rows["sample_deliveries"].astype(int).values,
+        "ASAP n": rows["asap_n"].fillna(0).astype(int).values,
+        "Lifetime deliv.": rows["lifetime_deliveries"].astype(int).values,
+        "Lifetime rating": rows["lifetime_star"].round(2).values,
+        "Shrunk rating": rows["shrunk_rating"].round(2).values,
+        "On-time adj %": (100 * rows["ontime_adj"]).round(1).values,
+        "Severe %": (100 * rows["severe_late_rate"]).round(1).values,
+        "Logged %": (100 * rows["arrival_logged"]).round(1).values,
+        "Vehicle": rows["vehicles"].values,
+    })
+    if show:
+        for label, col in COMPONENT_COLUMNS.items():
+            full_view[label] = rows[col].round(1).values
+    full_view["Current"] = [approved_tiers.get((market, d), r) for d, r in zip(full_view["Dasher"], full_view["Recommended"])]
+    full_view["Override"] = [overrides.get(d, c) for d, c in zip(full_view["Dasher"], full_view["Current"])]
+
+    # filters: display only, for tiered Dashers — Approve always covers every Dasher, filtered in or out
     f1, f2, f3, f4 = st.columns(4)
     tiers = f1.multiselect("Tier", ["Tier 1", "Tier 2"], default=["Tier 1", "Tier 2"], key=f"f_tier_{market}")
     min_rating = f2.slider("Min lifetime rating", 3.5, 5.0, 3.5, 0.05, key=f"f_rating_{market}")
     max_life = int(full_view["Lifetime deliv."].max()) if len(full_view) else 1
     min_life = f3.slider("Min lifetime deliveries", 0, max_life, 0, 50, key=f"f_life_{market}")
     min_ontime = f4.slider("Min on-time rate %", 0, 100, 0, 5, key=f"f_ontime_{market}")
-    mask = (full_view["Recommended"].isin(tiers) & (full_view["Lifetime rating"] >= min_rating)
-            & (full_view["Lifetime deliv."] >= min_life) & (full_view["On-time adj %"] >= min_ontime))
-    view = full_view[mask].reset_index(drop=True)
-    st.caption(f"Showing {len(view)} of {len(full_view)} gate-passers · change **Override** to override, "
-               "then Approve below")
+    eligible = full_view[full_view["Current"] != "Not eligible"]
+    mask = (eligible["Current"].isin(tiers + ["Excluded"]) & (eligible["Lifetime rating"] >= min_rating)
+            & (eligible["Lifetime deliv."] >= min_life) & (eligible["On-time adj %"] >= min_ontime))
+    view = eligible[mask].reset_index(drop=True)
+    status = "approved" if approved_any else "recommended"
+    st.caption(f"Showing {len(view)} of {len(eligible)} tiered Dashers · change **Override** to override, then Approve below"
+               + (" · sections show the **approved** tiers" if approved_any else ""))
+
     config = {
-        "": st.column_config.TextColumn("", width="small"),
         "Dasher": st.column_config.TextColumn("Dasher", width=88),
         "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f", width=112),
-        "Recommended": st.column_config.TextColumn("Recommended", width=85, help="Pipeline tier (read-only)"),
-        "Override": st.column_config.SelectboxColumn("Override", options=pipeline.TIER_OPTIONS, required=True,
-                                                     width=90, help="Operator's decision — change to override"),
-        "Review": st.column_config.TextColumn("Fraud review", width=95,
-                                              help="⚠️ = fraud flag in sample → manual review, never auto-excluded"),
+        "Review": st.column_config.TextColumn("Fraud review", width=95),
         "Vehicle": st.column_config.TextColumn("Vehicle", width=85),
+        "Failed gate(s)": st.column_config.TextColumn("Failed gate(s)", width=150),
     }
-    # pixel widths + short labels so all columns fit a laptop screen; the data column names are unchanged
     for col, label, w in (("Deliveries", "Deliveries", 92), ("ASAP n", "ASAP deliveries", 118), ("Lifetime deliv.", "Lifetime deliveries", 132)):
         config[col] = st.column_config.NumberColumn(label, format="%d", width=w)
     for col, label in (("Lifetime rating", "Lifetime ★"), ("Shrunk rating", "Shrunk ★")):
@@ -210,54 +246,38 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     for col, text in COLUMN_HELP.items():          # ? tooltip with the definition on every header
         if col in config:
             config[col]["help"] = text
-    overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
-    for tier_label, colour in (("Tier 1", "red"), ("Tier 2", None)):         # Tier 1 red, Tier 2 black
-        section = view[view["Recommended"] == tier_label].reset_index(drop=True)
+    hidden = ("Recommended", "Current", "Failed gate(s)")
+    order = ["Dasher", "Score", "Override", "Review"] + [c for c in full_view.columns if c not in ("Dasher", "Score", "Override", "Review", *hidden)]
+
+    def editor(frame, key, options, columns):
+        cfg = dict(config)
+        cfg["Override"] = st.column_config.SelectboxColumn("Override", options=options, required=True, width=90, help=COLUMN_HELP["Override"])
+        shown = frame[[c for c in columns if c in frame.columns]]
+        edited = st.data_editor(shown, column_config=cfg, disabled=[c for c in shown.columns if c != "Override"], hide_index=True,
+                                width="stretch", height=35 * (len(shown) + 1) + 3,
+                                key=f"{key}_{'full' if show else 'compact'}_{abs(hash(tuple(shown['Dasher'])))}")
+        overrides.update(zip(edited["Dasher"], edited["Override"]))
+
+    for tier_label, colour in (("Tier 1", "red"), ("Tier 2", None), ("Excluded", "gray")):   # Tier 1 red, Tier 2 black
+        section = view[view["Current"] == tier_label].reset_index(drop=True)
         if section.empty:
             continue
-        head = f":{colour}[● {tier_label} — recommended]" if colour else f"● {tier_label} — recommended"
+        head = f":{colour}[● {tier_label} — {status}]" if colour else f"● {tier_label} — {status}"
         st.markdown(f"#### {head} &nbsp; <span style='color:gray;font-weight:normal'>"
                     f"{len(section)} Dasher{'s' if len(section) != 1 else ''}</span>", unsafe_allow_html=True)
-        shown = section.drop(columns=["Recommended", ""])          # recommendation stays in the data for the approval log
-        edited = st.data_editor(shown, column_config=config,
-                                disabled=[c for c in shown.columns if c != "Override"],
-                                hide_index=True, width="stretch",
-                                height=35 * (len(section) + 1) + 3,     # show every visible row without an inner scrollbar
-                                key=f"editor_{market}_{tier_label}_{'full' if show else 'compact'}_{abs(hash(tuple(section['Dasher'])))}")
-        overrides.update(zip(edited["Dasher"], edited["Override"]))
-    st.session_state[f"tier_override_{market}"] = overrides
-    approval_frame = full_view[["Dasher", "Score", "Recommended"]].copy()
-    approval_frame["Tier"] = [overrides.get(d, r) for d, r in zip(full_view["Dasher"], full_view["Recommended"])]
-    approval_frame["Review"] = full_view["Review"].values
-    st.session_state[f"edited_{market}"] = approval_frame.assign(MARKET_NAME=market)
-    # read-only: Dashers who did not clear the gates (cannot be approved), with the gate(s) they failed
-    non = scorecard[(scorecard["MARKET_NAME"] == market) & ~scorecard["passes_gates"]].sort_values("selection_score", ascending=False)
+        editor(section, f"editor_{market}_{tier_label}", pipeline.TIER_OPTIONS[:3], order)
+
+    non = full_view[full_view["Current"] == "Not eligible"].reset_index(drop=True)
     if len(non):
-        def failed_gates(r):
-            out = []
-            if not r["widget_capable"]: out.append("vehicle")
-            if r["lifetime_deliveries"] < pipeline.GATE_LIFETIME_MIN[market]: out.append(f"lifetime < {pipeline.GATE_LIFETIME_MIN[market]}")
-            if (r["asap_n"] if pd.notna(r["asap_n"]) else 0) < pipeline.GATE_ASAP_MIN[market]: out.append(f"ASAP < {pipeline.GATE_ASAP_MIN[market]}")
-            return ", ".join(out)
-        non_view = pd.DataFrame({
-            "Dasher": non["DASHER"].values,
-            "Score": non["selection_score"].round(1).values,
-            "Failed gate(s)": [failed_gates(r) for _, r in non.iterrows()],
-            "Review": ["review" if f else "" for f in non["fraud_review"]],
-            "Deliveries": non["sample_deliveries"].astype(int).values,
-            "ASAP n": non["asap_n"].fillna(0).astype(int).values,
-            "Lifetime deliv.": non["lifetime_deliveries"].astype(int).values,
-            "Lifetime rating": non["lifetime_star"].round(2).values,
-            "Shrunk rating": non["shrunk_rating"].round(2).values,
-            "On-time adj %": (100 * non["ontime_adj"]).round(1).values,
-            "Severe %": (100 * non["severe_late_rate"]).round(1).values,
-            "Logged %": (100 * non["arrival_logged"]).round(1).values,
-            "Vehicle": non["vehicles"].values,
-        })
         st.markdown(f"#### ○ Did not clear gates &nbsp; <span style='color:gray;font-weight:normal'>{len(non)} Dashers · "
-                    "read-only, not eligible for approval</span>", unsafe_allow_html=True)
-        non_config = dict(config); non_config["Failed gate(s)"] = st.column_config.TextColumn("Failed gate(s)", width=150, help=COLUMN_HELP["Failed gate(s)"])
-        st.dataframe(non_view, column_config=non_config, hide_index=True, width="stretch", height=35 * (len(non_view) + 1) + 3)
+                    "set Override to Tier 1 or Tier 2 to promote one anyway</span>", unsafe_allow_html=True)
+        editor(non, f"editor_{market}_non", ["Not eligible", "Tier 1", "Tier 2"],
+               ["Dasher", "Score", "Override", "Failed gate(s)", "Review"] + [c for c in order if c not in ("Dasher", "Score", "Override", "Review")])
+
+    st.session_state[f"tier_override_{market}"] = overrides
+    approval_frame = full_view[["Dasher", "Score", "Recommended", "Review"]].copy()
+    approval_frame["Tier"] = [overrides.get(d, c) for d, c in zip(full_view["Dasher"], full_view["Current"])]
+    st.session_state[f"edited_{market}"] = approval_frame.assign(MARKET_NAME=market)
     st.toggle("Show score components", key=f"components_{market}")
 
 
@@ -272,6 +292,8 @@ def approve(source: str) -> None:
         fh.write(f"# operator overrides at {stamp}; source {source}\n")
         overrides.to_csv(fh, index=False)
     st.session_state["approved"] = (stamp, len(approved), len(overrides))
+    st.session_state["approved_tiers"] = {(m, d): t for m, d, t in zip(approved["MARKET_NAME"], approved["DASHER"], approved["approved_tier"])}
+    st.rerun()                                   # sections regroup by the approved tiers
 
 
 # ----------------------------------------------------------------------------- page

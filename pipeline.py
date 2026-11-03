@@ -299,7 +299,7 @@ def diff(scorecard: pd.DataFrame, prior: pd.DataFrame | None, movers: int = 5) -
 
 
 # ----------------------------------------------------------------------------- approval bookkeeping
-TIER_OPTIONS = ["Tier 1", "Tier 2", "Excluded"]   # what an operator may set a gate-passer to before approving
+TIER_OPTIONS = ["Tier 1", "Tier 2", "Excluded", "Not eligible"]   # operator choices; "Not eligible" = did not clear gates
 
 
 def approval_records(edited: pd.DataFrame, approved_at: str, approved_by: str = "operator") -> tuple[pd.DataFrame, pd.DataFrame]:
