@@ -149,8 +149,8 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     mask = (full_view["Recommended"].isin(tiers) & (full_view["Lifetime rating"] >= min_rating)
             & (full_view["Deliveries"] >= min_deliv) & (full_view["On-time adj %"] >= min_ontime))
     view = full_view[mask].reset_index(drop=True)
-    st.caption(f"Showing {len(view)} of {len(full_view)} gate-passers · 🟢 recommended Tier 1 · 🟡 recommended Tier 2 · "
-               "change **Manually override tier** to override, then Approve below")
+    st.caption(f"Showing {len(view)} of {len(full_view)} gate-passers · change **Manually override tier** to override, "
+               "then Approve below")
     config = {
         "": st.column_config.TextColumn("", width="small"),
         "Dasher": st.column_config.TextColumn("Dasher"),
@@ -167,12 +167,19 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     for label in ("On-time adj %", "Severe-late %", "Arrival logged %") + tuple(COMPONENT_COLUMNS):
         config[label] = st.column_config.NumberColumn(label, format="%.1f")
     config["Vehicle"] = st.column_config.TextColumn("Vehicle")
-    edited = st.data_editor(view, column_config=config, disabled=[c for c in view.columns if c != "Manually override tier"],
-                            hide_index=True, width="stretch",
-                            height=35 * (len(view) + 1) + 3,          # show every visible row without an inner scrollbar
-                            key=f"editor_{market}_{'full' if show else 'compact'}_{abs(hash(tuple(view['Dasher'])))}")
     overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
-    overrides.update(zip(edited["Dasher"], edited["Manually override tier"]))
+    for tier_label, colour in (("Tier 1", "green"), ("Tier 2", "orange")):      # one coloured section per recommended tier
+        section = view[view["Recommended"] == tier_label].reset_index(drop=True)
+        if section.empty:
+            continue
+        st.markdown(f"#### :{colour}[● {tier_label} — recommended] &nbsp; <span style='color:gray;font-weight:normal'>"
+                    f"{len(section)} Dasher{'s' if len(section) != 1 else ''}</span>", unsafe_allow_html=True)
+        edited = st.data_editor(section, column_config=config,
+                                disabled=[c for c in section.columns if c != "Manually override tier"],
+                                hide_index=True, width="stretch",
+                                height=35 * (len(section) + 1) + 3,     # show every visible row without an inner scrollbar
+                                key=f"editor_{market}_{tier_label}_{'full' if show else 'compact'}_{abs(hash(tuple(section['Dasher'])))}")
+        overrides.update(zip(edited["Dasher"], edited["Manually override tier"]))
     st.session_state[f"tier_override_{market}"] = overrides
     approval_frame = full_view[["Dasher", "Score", "Recommended"]].copy()
     approval_frame["Tier"] = [overrides.get(d, r) for d, r in zip(full_view["Dasher"], full_view["Recommended"])]
