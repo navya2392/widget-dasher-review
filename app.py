@@ -143,11 +143,11 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     f1, f2, f3, f4 = st.columns(4)
     tiers = f1.multiselect("Tier", ["Tier 1", "Tier 2"], default=["Tier 1", "Tier 2"], key=f"f_tier_{market}")
     min_rating = f2.slider("Min lifetime rating", 3.5, 5.0, 3.5, 0.05, key=f"f_rating_{market}")
-    max_deliv = int(full_view["Deliveries"].max()) if len(full_view) else 1
-    min_deliv = f3.slider("Min deliveries observed", 0, max_deliv, 0, key=f"f_deliv_{market}")
+    max_life = int(full_view["Lifetime deliveries"].max()) if len(full_view) else 1
+    min_life = f3.slider("Min lifetime deliveries", 0, max_life, 0, 50, key=f"f_life_{market}")
     min_ontime = f4.slider("Min on-time adj %", 0, 100, 0, 5, key=f"f_ontime_{market}")
     mask = (full_view["Recommended"].isin(tiers) & (full_view["Lifetime rating"] >= min_rating)
-            & (full_view["Deliveries"] >= min_deliv) & (full_view["On-time adj %"] >= min_ontime))
+            & (full_view["Lifetime deliveries"] >= min_life) & (full_view["On-time adj %"] >= min_ontime))
     view = full_view[mask].reset_index(drop=True)
     st.caption(f"Showing {len(view)} of {len(full_view)} gate-passers · change **Manually override tier** to override, "
                "then Approve below")
@@ -236,9 +236,12 @@ tab_score, tab_data, tab_changes = st.tabs(["📊 Scorecard", "🧪 Data check",
 
 # ----------------------------------------------------------------------------- scorecard (first)
 with tab_score:
-    city_tabs = st.tabs(MARKETS)                 # one city at a time, full width; both editors still render each run
+    CITY_STYLE = {"Dashattan": ("red", "🏙️"), "Doorlanta": ("blue", "🌆")}
+    city_tabs = st.tabs([f":{CITY_STYLE[m][0]}[**{CITY_STYLE[m][1]} {m.upper()}**]" for m in MARKETS])   # one city at a time
     for city_tab, market in zip(city_tabs, MARKETS):
         with city_tab:
+            colour, icon = CITY_STYLE[market]
+            st.markdown(f"## :{colour}[{icon} {market.upper()}]")
             render_market(scorecard, market)
             cohort = pipeline.bike_cohort(scorecard)
             cohort = cohort[cohort["MARKET_NAME"] == market]
