@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 import pipeline
 
 MODEL = "claude-sonnet-5-5"          # current Sonnet (human's choice, 2026-11-02)
-MAX_TOKENS = 800
+MAX_TOKENS = 1000                    # both outputs truncated at 800 on the 2026-11-03 run; 1000 is untested
 PROMPTS_DIR = Path(__file__).with_name("prompts")
 QA_PROMPT = PROMPTS_DIR / "qa_system.md"
 BRIEFING_PROMPT = PROMPTS_DIR / "briefing_system.md"

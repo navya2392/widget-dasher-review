@@ -14,6 +14,8 @@ DoorDash case data (`data/2026_Platform_Ops_Widget_Data.xlsx`). The analysis tha
 
 Optional: put `ANTHROPIC_API_KEY=...` in `.env` (or Streamlit secrets) to enable the AI panels. Without a
 key the app runs in degraded mode and says so; every number on screen comes from `pipeline.py` either way.
+The Approve button writes `approved_tiers.csv` next to the app; on Streamlit Cloud that file is ephemeral
+(gone on restart), which is fine for the demo.
 
 ## Lock test
     pytest test_lock.py -v
