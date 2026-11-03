@@ -42,35 +42,46 @@ def ensure_api_key() -> None:
         pass
 
 
+SAVED_QA = Path("demo/e2e_qa.md")               # verified AI outputs of the demo run (2026-11-03); shipped with the app
+SAVED_BRIEFING = Path("demo/e2e_briefing.md")
+SAVED_NOTE = "_Saved from the verified demo run (2026-11-03) — no live model call. Uploaded files get a live read._"
+
+
 @st.cache_data(show_spinner=False)
-def cached_run(raw_bytes: bytes, prior_bytes: bytes | None, source: str) -> dict:
+def cached_run(raw_bytes: bytes, prior_bytes: bytes | None, source: str, use_saved_ai: bool = False) -> dict:
     """One pipeline run plus at most one call per AI function, cached on the input bytes: the first session to
-    run a given workbook pays once per server process; every later session (and every rerun) gets it instantly."""
+    run a given workbook pays once per server process; every later session (and every rerun) gets it instantly.
+    use_saved_ai: the demo shows the saved, verified AI texts instead of calling the model (instant, no key needed)."""
     raw = pd.read_excel(io.BytesIO(raw_bytes))
     prior = pd.read_csv(io.BytesIO(prior_bytes)) if prior_bytes else None
     result = pipeline.run_raw(raw)
-    ensure_api_key()
-    qa = ai.qa_summary(result["profile"])
-    qa_error = ai.last_error
-    briefing = briefing_error = None
     diff = pipeline.diff(result["scorecard"], prior)
-    if prior is not None:
-        verdict = [line for line in (qa or "").splitlines() if "VERDICT" in line]
-        qa_note = verdict[-1] if verdict else ("QA report truncated before its verdict" if qa else None)
-        briefing = ai.briefing(result["scorecard"], prior, qa_note=qa_note)
-        briefing_error = ai.last_error
+    if use_saved_ai and SAVED_QA.exists() and SAVED_BRIEFING.exists():
+        qa = SAVED_NOTE + "\n\n" + SAVED_QA.read_text(encoding="utf-8")
+        briefing = SAVED_NOTE + "\n\n" + SAVED_BRIEFING.read_text(encoding="utf-8") if prior is not None else None
+        qa_error = briefing_error = None
+    else:
+        ensure_api_key()
+        qa = ai.qa_summary(result["profile"])
+        qa_error = ai.last_error
+        briefing = briefing_error = None
+        if prior is not None:
+            verdict = [line for line in (qa or "").splitlines() if "VERDICT" in line]
+            qa_note = verdict[-1] if verdict else ("QA report truncated before its verdict" if qa else None)
+            briefing = ai.briefing(result["scorecard"], prior, qa_note=qa_note)
+            briefing_error = ai.last_error
     return {**result, "prior": prior, "diff": diff, "qa": qa, "qa_error": qa_error,
             "briefing": briefing, "briefing_error": briefing_error, "source": source,
             "ran_at": dt.datetime.now().isoformat(timespec="seconds")}
 
 
-def run_everything(raw_bytes: bytes, prior_bytes: bytes | None, source: str) -> dict:
+def run_everything(raw_bytes: bytes, prior_bytes: bytes | None, source: str, use_saved_ai: bool = False) -> dict:
     """Session-side wrapper: resets any operator overrides, then returns the (cached) run."""
     for market in MARKETS:
         st.session_state.pop(f"tier_override_{market}", None)
         st.session_state.pop(f"edited_{market}", None)
     st.session_state.pop("approved", None)
-    return cached_run(raw_bytes, prior_bytes, source)
+    return cached_run(raw_bytes, prior_bytes, source, use_saved_ai)
 
 
 def profile_facts(p: dict) -> pd.DataFrame:
@@ -112,16 +123,16 @@ def scorecard_view(scorecard: pd.DataFrame, market: str, show_components: bool) 
         "Dasher": passers["DASHER"].values,
         "Score": passers["selection_score"].round(1).values,
         "Recommended": passers["tier"].values,
-        "Manually override tier": [overrides.get(d, t) for d, t in zip(passers["DASHER"], passers["tier"])],
+        "Override": [overrides.get(d, t) for d, t in zip(passers["DASHER"], passers["tier"])],
         "Review": ["⚠️ review" if f else "" for f in passers["fraud_review"]],
         "Deliveries": passers["sample_deliveries"].astype(int).values,
-        "ASAP orders": passers["asap_n"].fillna(0).astype(int).values,
-        "Lifetime deliveries": passers["lifetime_deliveries"].astype(int).values,
+        "ASAP n": passers["asap_n"].fillna(0).astype(int).values,
+        "Lifetime deliv.": passers["lifetime_deliveries"].astype(int).values,
         "Lifetime rating": passers["lifetime_star"].round(2).values,
-        "Rating (shrunk)": passers["shrunk_rating"].round(2).values,
+        "Shrunk rating": passers["shrunk_rating"].round(2).values,
         "On-time adj %": (100 * passers["ontime_adj"]).round(1).values,
-        "Severe-late %": (100 * passers["severe_late_rate"]).round(1).values,
-        "Arrival logged %": (100 * passers["arrival_logged"]).round(1).values,
+        "Severe %": (100 * passers["severe_late_rate"]).round(1).values,
+        "Logged %": (100 * passers["arrival_logged"]).round(1).values,
         "Vehicle": passers["vehicles"].values,
     })
     if show_components:
@@ -143,30 +154,31 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
     f1, f2, f3, f4 = st.columns(4)
     tiers = f1.multiselect("Tier", ["Tier 1", "Tier 2"], default=["Tier 1", "Tier 2"], key=f"f_tier_{market}")
     min_rating = f2.slider("Min lifetime rating", 3.5, 5.0, 3.5, 0.05, key=f"f_rating_{market}")
-    max_life = int(full_view["Lifetime deliveries"].max()) if len(full_view) else 1
+    max_life = int(full_view["Lifetime deliv."].max()) if len(full_view) else 1
     min_life = f3.slider("Min lifetime deliveries", 0, max_life, 0, 50, key=f"f_life_{market}")
-    min_ontime = f4.slider("Min on-time adj %", 0, 100, 0, 5, key=f"f_ontime_{market}")
+    min_ontime = f4.slider("Min on-time rate %", 0, 100, 0, 5, key=f"f_ontime_{market}")
     mask = (full_view["Recommended"].isin(tiers) & (full_view["Lifetime rating"] >= min_rating)
-            & (full_view["Lifetime deliveries"] >= min_life) & (full_view["On-time adj %"] >= min_ontime))
+            & (full_view["Lifetime deliv."] >= min_life) & (full_view["On-time adj %"] >= min_ontime))
     view = full_view[mask].reset_index(drop=True)
-    st.caption(f"Showing {len(view)} of {len(full_view)} gate-passers · change **Manually override tier** to override, "
+    st.caption(f"Showing {len(view)} of {len(full_view)} gate-passers · change **Override** to override, "
                "then Approve below")
     config = {
         "": st.column_config.TextColumn("", width="small"),
-        "Dasher": st.column_config.TextColumn("Dasher"),
-        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
-        "Recommended": st.column_config.TextColumn("Recommended", help="Pipeline tier (read-only)"),
-        "Manually override tier": st.column_config.SelectboxColumn("Manually override tier", options=pipeline.TIER_OPTIONS,
-                                                                   required=True, help="Operator's decision — change to override"),
-        "Review": st.column_config.TextColumn("Review", help="⚠️ = fraud flag in sample → manual review, never auto-excluded"),
+        "Dasher": st.column_config.TextColumn("Dasher", width="medium"),
+        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f", width="medium"),
+        "Recommended": st.column_config.TextColumn("Recommended", width="small", help="Pipeline tier (read-only)"),
+        "Override": st.column_config.SelectboxColumn("Override", options=pipeline.TIER_OPTIONS, required=True,
+                                                          width="small", help="Operator's decision — change to override"),
+        "Review": st.column_config.TextColumn("Review", width="small",
+                                              help="⚠️ = fraud flag in sample → manual review, never auto-excluded"),
+        "Vehicle": st.column_config.TextColumn("Vehicle", width="small"),
     }
-    for label in ("Deliveries", "ASAP orders", "Lifetime deliveries"):
-        config[label] = st.column_config.NumberColumn(label, format="%d")
-    for label in ("Lifetime rating", "Rating (shrunk)"):
-        config[label] = st.column_config.NumberColumn(label, format="%.2f")
-    for label in ("On-time adj %", "Severe-late %", "Arrival logged %") + tuple(COMPONENT_COLUMNS):
-        config[label] = st.column_config.NumberColumn(label, format="%.1f")
-    config["Vehicle"] = st.column_config.TextColumn("Vehicle")
+    for label in ("Deliveries", "ASAP n", "Lifetime deliv."):
+        config[label] = st.column_config.NumberColumn(label, format="%d", width="small")
+    for label in ("Lifetime rating", "Shrunk rating"):
+        config[label] = st.column_config.NumberColumn(label, format="%.2f", width="small")
+    for label in ("On-time adj %", "Severe %", "Logged %") + tuple(COMPONENT_COLUMNS):
+        config[label] = st.column_config.NumberColumn(label, format="%.1f", width="small")
     overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
     for tier_label, colour in (("Tier 1", "green"), ("Tier 2", "orange")):      # one coloured section per recommended tier
         section = view[view["Recommended"] == tier_label].reset_index(drop=True)
@@ -174,12 +186,13 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
             continue
         st.markdown(f"#### :{colour}[● {tier_label} — recommended] &nbsp; <span style='color:gray;font-weight:normal'>"
                     f"{len(section)} Dasher{'s' if len(section) != 1 else ''}</span>", unsafe_allow_html=True)
-        edited = st.data_editor(section, column_config=config,
-                                disabled=[c for c in section.columns if c != "Manually override tier"],
+        shown = section.drop(columns=["Recommended", ""])          # recommendation stays in the data for the approval log
+        edited = st.data_editor(shown, column_config=config,
+                                disabled=[c for c in shown.columns if c != "Override"],
                                 hide_index=True, width="stretch",
                                 height=35 * (len(section) + 1) + 3,     # show every visible row without an inner scrollbar
                                 key=f"editor_{market}_{tier_label}_{'full' if show else 'compact'}_{abs(hash(tuple(section['Dasher'])))}")
-        overrides.update(zip(edited["Dasher"], edited["Manually override tier"]))
+        overrides.update(zip(edited["Dasher"], edited["Override"]))
     st.session_state[f"tier_override_{market}"] = overrides
     approval_frame = full_view[["Dasher", "Score", "Recommended"]].copy()
     approval_frame["Tier"] = [overrides.get(d, r) for d, r in zip(full_view["Dasher"], full_view["Recommended"])]
@@ -222,8 +235,9 @@ if want_upload and col_run.button("Run", disabled=upload is None):
     with st.spinner("Running pipeline and AI stages..."):
         st.session_state["run"] = run_everything(upload.getvalue(), prior_bytes, source=upload.name)
 if col_demo.button("Run with demo data"):
-    with st.spinner("Running pipeline and AI stages on the case data (cached after the first run)..."):
-        st.session_state["run"] = run_everything(DEMO_XLSX.read_bytes(), demo_prior_bytes, source=f"demo: {DEMO_XLSX.name}")
+    with st.spinner("Running the pipeline on the case data..."):
+        st.session_state["run"] = run_everything(DEMO_XLSX.read_bytes(), demo_prior_bytes, source=f"demo: {DEMO_XLSX.name}",
+                                                 use_saved_ai=True)
 
 run = st.session_state.get("run")
 if run is None:
