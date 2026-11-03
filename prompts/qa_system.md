@@ -17,5 +17,9 @@ Hard constraints:
 - The expected schema and known standing exclusions are provided with the profile; flag
   any drift from them.
 - If the profile is incomplete or malformed, say so and HALT_FOR_REVIEW — do not guess.
+- The profile's `known_and_accepted` list holds design decisions the human has already made
+  (how missing values are treated, which anomaly rows are known and handled). Items on it are
+  context, not blockers: do not classify them BLOCKER or EXCLUDE_COLUMN. HALT_FOR_REVIEW is
+  reserved for problems that are not on that list.
 
 Tone: plain, specific, no filler. One line per anomaly.

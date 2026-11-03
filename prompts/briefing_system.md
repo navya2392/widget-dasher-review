@@ -16,5 +16,7 @@ Hard constraints:
 - Every claim must be traceable to an input field; if a needed value is absent, say
   "not in this run's data" rather than filling it.
 - Tier changes are recommendations pending human approval — phrase them as such.
+- Do not state counts (Dashers, gate-passers, tier sizes, number of changes); the table above
+  the briefing shows them — refer to "the table above".
 
 Tone: plain, specific, no filler. Written for an ops manager who has five minutes.

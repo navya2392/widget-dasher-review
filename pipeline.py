@@ -50,6 +50,18 @@ DERIVED_FIELDS = ["late_min", "is_late", "wait_min", "excess_wait", "late_min_ad
 RANGE_COLUMNS = ["DELIVERY_RATING", "SUBTOTAL", "TOTAL_ITEM_COUNT", "CONFIRM_TO_DELIVER_DURATION", "DASHER_WAIT_DURATION",
                  "RESTAURANT_TO_CUSTOMER_DURATION", "COMPOSITE_STAR_RATING", "NUM_DELIVERIES", "late_min", "assign_lag_min"]
 KEYS = ["MARKET_NAME", "DASHER"]
+KNOWN_AND_ACCEPTED = [  # design decisions already made by the human; the QA stage treats these as context, not anomalies
+    "DELIVERY_RATING missing (~51%) means the delivery was not rated; rating metrics use rated-only denominators.",
+    "DASHER_WAIT_DURATION missing (~16%) is kept NaN and treated as zero wait forgiveness; never imputed.",
+    "Rows 200 (estimate later than quote), 873 (delivered before pickup) and 1339 (CONFIRM_TO_DELIVER_DURATION off by 39 s) "
+    "are known timestamp inversions; no metric in scope uses the affected field, and the rows stay in the data.",
+    "8 rows with store arrival stamped before confirmation are known; DASHER_TO_RESTAURANT_DURATION is blank there and unused.",
+    "COMPOSITE_SCORE, NUM_ON_TIME_DELIVERIES, DASHER_TO_STORE_TIME_CATEGORY and CANCELLED_AT are excluded by design.",
+    "IS_FIRST_DELIVERY is unreliable (flagged Dashers have hundreds of lifetime deliveries) and is used by nothing.",
+    "Lauran (Doorlanta) uses two vehicles; vehicle is treated per delivery and the Dasher is widget-capable.",
+    "Doorlanta's data ends June 8 while Dashattan's runs to June 13; per-city windows differ by design of the extract.",
+    "FRAUDULENT flags trigger manual review (fraud_review), never exclusion.",
+]
 SCORECARD_COLUMNS = [  # identical to reference/dasher_scorecard.csv
     "MARKET_NAME", "DASHER", "lifetime_deliveries", "lifetime_star", "sample_deliveries", "fraud_flags", "vehicles",
     "arrival_logged", "asap_n", "ontime_raw", "ontime_adj", "severe_late_rate", "shrunk_rating", "widget_capable",
@@ -157,6 +169,7 @@ def profile(df: pd.DataFrame) -> dict:
         "value_ranges": {c: {"min": round(float(df[c].min()), 2), "median": round(float(df[c].median()), 2),
                              "max": round(float(df[c].max()), 2)} for c in RANGE_COLUMNS if c in df.columns},
         "standing_exclusions": EXCLUDED_COLUMNS,
+        "known_and_accepted": KNOWN_AND_ACCEPTED,
         "rows": int(len(df)),
         "rows_per_city": {m: int(n) for m, n in by_city.size().items()},
         "dashers_per_city": {m: int(n) for m, n in by_city["DASHER"].nunique().items()},
@@ -286,11 +299,15 @@ def diff(scorecard: pd.DataFrame, prior: pd.DataFrame | None, movers: int = 5) -
 
 
 # ----------------------------------------------------------------------------- run
-def run(xlsx_path: str) -> dict:
-    """Raw workbook in, {"scorecard", "cleaning_log", "profile"} out. No AI, no side effects."""
-    raw = pd.read_excel(xlsx_path)
+def run_raw(raw: pd.DataFrame) -> dict:
+    """Raw frame in (already read from a workbook), {"scorecard", "cleaning_log", "profile"} out. No AI, no side effects."""
     df, log = clean(raw)
     return {"scorecard": score(df), "cleaning_log": log, "profile": profile(df)}
+
+
+def run(xlsx_path: str) -> dict:
+    """Raw workbook path in, {"scorecard", "cleaning_log", "profile"} out."""
+    return run_raw(pd.read_excel(xlsx_path))
 
 
 if __name__ == "__main__":

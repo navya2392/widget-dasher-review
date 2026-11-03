@@ -6,3 +6,4 @@ export_*.xlsx
 *.pyc
 .DS_Store
 analysis_report*.pdf
+approved_tiers.csv

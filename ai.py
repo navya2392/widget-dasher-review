@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 import pipeline
 
-MODEL = "claude-sonnet-4-5"          # as specified by the human; previous-generation Sonnet ID
+MODEL = "claude-sonnet-5-5"          # current Sonnet (human's choice, 2026-11-02)
 MAX_TOKENS = 800
 PROMPTS_DIR = Path(__file__).with_name("prompts")
 QA_PROMPT = PROMPTS_DIR / "qa_system.md"
@@ -47,6 +47,9 @@ def _call(system_file: Path, user_text: str) -> str | None:
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
+            # Sonnet 5.5 thinks adaptively by default and would spend the small max_tokens budget on thinking
+            # before writing any text; "between_tools" switches thinking off for a plain (no-tool) request.
+            thinking={"type": "between_tools"},
             system=system_file.read_text(encoding="utf-8"),
             messages=[{"role": "user", "content": user_text}],
         )
@@ -55,8 +58,10 @@ def _call(system_file: Path, user_text: str) -> str | None:
             return None
         text = "".join(block.text for block in response.content if block.type == "text").strip()
         if not text:
-            last_error = "empty response"
+            last_error = f"empty response (stop_reason={response.stop_reason}, blocks={[b.type for b in response.content]})"
             return None
+        if response.stop_reason == "max_tokens":
+            text += "\n\n_[truncated at max_tokens]_"
         return text
     except Exception as exc:  # the pipeline must never fail because the AI call did
         last_error = f"{type(exc).__name__}: {exc}"
