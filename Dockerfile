@@ -6,6 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py pipeline.py ai.py ./
 COPY prompts/ prompts/
+COPY .streamlit/ .streamlit/
 COPY data/ data/
 COPY demo/ demo/
 ENV PORT=8080

@@ -108,45 +108,76 @@ def scorecard_view(scorecard: pd.DataFrame, market: str, show_components: bool) 
                .sort_values("selection_score", ascending=False))
     overrides = st.session_state.get(f"tier_override_{market}", {})
     view = pd.DataFrame({
+        "": ["🟢" if t == "Tier 1" else "🟡" for t in passers["tier"]],
         "Dasher": passers["DASHER"].values,
         "Score": passers["selection_score"].round(1).values,
         "Recommended": passers["tier"].values,
-        "Tier": [overrides.get(d, t) for d, t in zip(passers["DASHER"], passers["tier"])],
-        "Review": ["✓" if f else "" for f in passers["fraud_review"]],
+        "Manually override tier": [overrides.get(d, t) for d, t in zip(passers["DASHER"], passers["tier"])],
+        "Review": ["⚠️ review" if f else "" for f in passers["fraud_review"]],
+        "Deliveries": passers["sample_deliveries"].astype(int).values,
+        "ASAP orders": passers["asap_n"].fillna(0).astype(int).values,
+        "Lifetime deliveries": passers["lifetime_deliveries"].astype(int).values,
+        "Lifetime rating": passers["lifetime_star"].round(2).values,
+        "Rating (shrunk)": passers["shrunk_rating"].round(2).values,
+        "On-time adj %": (100 * passers["ontime_adj"]).round(1).values,
+        "Severe-late %": (100 * passers["severe_late_rate"]).round(1).values,
+        "Arrival logged %": (100 * passers["arrival_logged"]).round(1).values,
+        "Vehicle": passers["vehicles"].values,
     })
     if show_components:
         for label, col in COMPONENT_COLUMNS.items():
             view[label] = passers[col].round(1).values
-        for label, (col, mult) in INPUT_COLUMNS.items():
-            view[label] = (passers[col] * mult).round(1).values
     return view
 
 
 def render_market(scorecard: pd.DataFrame, market: str) -> None:
-    st.subheader(market)
     passers = scorecard[(scorecard["MARKET_NAME"] == market) & scorecard["passes_gates"]]
     m1, m2, m3 = st.columns(3)
-    m1.metric("Gate-passers", int(len(passers)))
-    m2.metric("Tier 1", int((passers["tier"] == "Tier 1").sum()))
-    m3.metric("Fraud reviews", int(passers["fraud_review"].sum()))
+    m1.metric("Gate-passers", int(len(passers)), delta=f"of {int((scorecard['MARKET_NAME'] == market).sum())} Dashers", delta_color="off")
+    m2.metric("Tier 1", int((passers["tier"] == "Tier 1").sum()), delta=f"top {pipeline.TIER1_SIZE[market]} by score")
+    m3.metric("Fraud reviews", int(passers["fraud_review"].sum()), delta="manual check, never excluded", delta_color="inverse")
     show = st.session_state.get(f"components_{market}", False)
-    view = scorecard_view(scorecard, market, show)
+    full_view = scorecard_view(scorecard, market, show)
+
+    # filters: display only — Approve always covers every gate-passer, filtered in or out
+    f1, f2, f3, f4 = st.columns(4)
+    tiers = f1.multiselect("Tier", ["Tier 1", "Tier 2"], default=["Tier 1", "Tier 2"], key=f"f_tier_{market}")
+    min_rating = f2.slider("Min lifetime rating", 3.5, 5.0, 3.5, 0.05, key=f"f_rating_{market}")
+    max_deliv = int(full_view["Deliveries"].max()) if len(full_view) else 1
+    min_deliv = f3.slider("Min deliveries observed", 0, max_deliv, 0, key=f"f_deliv_{market}")
+    min_ontime = f4.slider("Min on-time adj %", 0, 100, 0, 5, key=f"f_ontime_{market}")
+    mask = (full_view["Recommended"].isin(tiers) & (full_view["Lifetime rating"] >= min_rating)
+            & (full_view["Deliveries"] >= min_deliv) & (full_view["On-time adj %"] >= min_ontime))
+    view = full_view[mask].reset_index(drop=True)
+    st.caption(f"Showing {len(view)} of {len(full_view)} gate-passers · 🟢 recommended Tier 1 · 🟡 recommended Tier 2 · "
+               "change **Manually override tier** to override, then Approve below")
     config = {
+        "": st.column_config.TextColumn("", width="small"),
         "Dasher": st.column_config.TextColumn("Dasher"),
         "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
         "Recommended": st.column_config.TextColumn("Recommended", help="Pipeline tier (read-only)"),
-        "Tier": st.column_config.SelectboxColumn("Tier", options=pipeline.TIER_OPTIONS, required=True,
-                                                 help="Operator's decision — change to override"),
-        "Review": st.column_config.TextColumn("Review", help="✓ = fraud flag in sample, manual review"),
+        "Manually override tier": st.column_config.SelectboxColumn("Manually override tier", options=pipeline.TIER_OPTIONS,
+                                                                   required=True, help="Operator's decision — change to override"),
+        "Review": st.column_config.TextColumn("Review", help="⚠️ = fraud flag in sample → manual review, never auto-excluded"),
     }
-    for label in list(COMPONENT_COLUMNS) + list(INPUT_COLUMNS):
+    for label in ("Deliveries", "ASAP orders", "Lifetime deliveries"):
+        config[label] = st.column_config.NumberColumn(label, format="%d")
+    for label in ("Lifetime rating", "Rating (shrunk)"):
+        config[label] = st.column_config.NumberColumn(label, format="%.2f")
+    for label in ("On-time adj %", "Severe-late %", "Arrival logged %") + tuple(COMPONENT_COLUMNS):
         config[label] = st.column_config.NumberColumn(label, format="%.1f")
-    edited = st.data_editor(view, column_config=config, disabled=[c for c in view.columns if c != "Tier"],
+    config["Vehicle"] = st.column_config.TextColumn("Vehicle")
+    edited = st.data_editor(view, column_config=config, disabled=[c for c in view.columns if c != "Manually override tier"],
                             hide_index=True, width="stretch",
-                            height=35 * (len(view) + 1) + 3,          # show every gate-passer without an inner scrollbar
-                            key=f"editor_{market}_{'full' if show else 'compact'}")
-    st.session_state[f"tier_override_{market}"] = dict(zip(edited["Dasher"], edited["Tier"]))
-    st.session_state[f"edited_{market}"] = edited[COMPACT_COLUMNS].assign(MARKET_NAME=market)
+                            height=35 * (len(view) + 1) + 3,          # show every visible row without an inner scrollbar
+                            key=f"editor_{market}_{'full' if show else 'compact'}_{abs(hash(tuple(view['Dasher'])))}")
+    overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
+    overrides.update(zip(edited["Dasher"], edited["Manually override tier"]))
+    st.session_state[f"tier_override_{market}"] = overrides
+    approval_frame = full_view[["Dasher", "Score", "Recommended"]].copy()
+    approval_frame["Tier"] = [overrides.get(d, r) for d, r in zip(full_view["Dasher"], full_view["Recommended"])]
+    approval_frame["Review"] = full_view["Review"].values
+    st.session_state[f"edited_{market}"] = approval_frame.assign(MARKET_NAME=market)
     st.toggle("Show score components", key=f"components_{market}")
 
 
@@ -164,8 +195,8 @@ def approve(source: str) -> None:
 
 
 # ----------------------------------------------------------------------------- page
-st.set_page_config(page_title="Widget Dasher Review", layout="wide")
-st.title("Widget Dasher Review")
+st.set_page_config(page_title="Widget Dasher Review", page_icon="📦", layout="wide")
+st.title("📦 Widget Dasher Review")
 st.caption("AI interprets and explains; code computes; a human approves.")
 
 # The uploader widgets render only on request: Streamlit Community Cloud intermittently answers HTTP 500 for the
@@ -194,24 +225,23 @@ if run is None:
 
 st.caption(f"Source: {run['source']} · ran {run['ran_at']}")
 scorecard = run["scorecard"]
-tab_score, tab_data, tab_changes = st.tabs(["Scorecard", "Data check", "Changes vs prior run"])
+tab_score, tab_data, tab_changes = st.tabs(["📊 Scorecard", "🧪 Data check", "🔁 Changes vs prior run"])
 
 # ----------------------------------------------------------------------------- scorecard (first)
 with tab_score:
-    left, right = st.columns(2)
-    with left:
-        render_market(scorecard, "Dashattan")
-        cohort = pipeline.bike_cohort(scorecard)
-        cohort = cohort[cohort["MARKET_NAME"] == "Dashattan"]
-        if len(cohort):
-            with st.expander("Conditional bike cohort — Dashattan (display only; fails only the vehicle gate)"):
-                st.dataframe(cohort[["DASHER", "vehicles", "lifetime_deliveries", "asap_n", "ontime_adj", "shrunk_rating",
-                                     "selection_score", "fraud_review", "top_4"]].round(3), hide_index=True, width="stretch")
-    with right:
-        render_market(scorecard, "Doorlanta")
+    city_tabs = st.tabs(MARKETS)                 # one city at a time, full width; both editors still render each run
+    for city_tab, market in zip(city_tabs, MARKETS):
+        with city_tab:
+            render_market(scorecard, market)
+            cohort = pipeline.bike_cohort(scorecard)
+            cohort = cohort[cohort["MARKET_NAME"] == market]
+            if len(cohort):
+                with st.expander(f"Conditional bike cohort — {market} (display only; fails only the vehicle gate)"):
+                    st.dataframe(cohort[["DASHER", "vehicles", "lifetime_deliveries", "asap_n", "ontime_adj", "shrunk_rating",
+                                         "selection_score", "fraud_review", "top_4"]].round(3), hide_index=True, width="stretch")
     st.write("")
     _, mid, _ = st.columns([2, 1, 2])
-    if mid.button("Approve tier changes", width="stretch"):
+    if mid.button("Approve tier changes", width="stretch", type="primary"):
         approve(run["source"])
     if "approved" in st.session_state:
         stamp, n, m = st.session_state["approved"]
