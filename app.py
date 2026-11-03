@@ -164,21 +164,24 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
                "then Approve below")
     config = {
         "": st.column_config.TextColumn("", width="small"),
-        "Dasher": st.column_config.TextColumn("Dasher", width="medium"),
-        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f", width="medium"),
-        "Recommended": st.column_config.TextColumn("Recommended", width="small", help="Pipeline tier (read-only)"),
+        "Dasher": st.column_config.TextColumn("Dasher", width=95),
+        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f", width=130),
+        "Recommended": st.column_config.TextColumn("Recommended", width=85, help="Pipeline tier (read-only)"),
         "Override": st.column_config.SelectboxColumn("Override", options=pipeline.TIER_OPTIONS, required=True,
-                                                          width="small", help="Operator's decision — change to override"),
-        "Review": st.column_config.TextColumn("Fraud review", width="small",
+                                                     width=90, help="Operator's decision — change to override"),
+        "Review": st.column_config.TextColumn("Fraud review", width=95,
                                               help="⚠️ = fraud flag in sample → manual review, never auto-excluded"),
-        "Vehicle": st.column_config.TextColumn("Vehicle", width="small"),
+        "Vehicle": st.column_config.TextColumn("Vehicle", width=85),
     }
-    for label in ("Deliveries", "ASAP n", "Lifetime deliv."):
-        config[label] = st.column_config.NumberColumn(label, format="%d", width="small")
-    for label in ("Lifetime rating", "Shrunk rating"):
-        config[label] = st.column_config.NumberColumn(label, format="%.2f", width="small")
-    for label in ("On-time adj %", "Severe %", "Logged %") + tuple(COMPONENT_COLUMNS):
-        config[label] = st.column_config.NumberColumn(label, format="%.1f", width="small")
+    # pixel widths + short labels so all columns fit a laptop screen; the data column names are unchanged
+    for col, label in (("Deliveries", "Deliv."), ("ASAP n", "ASAP n"), ("Lifetime deliv.", "Lifetime n")):
+        config[col] = st.column_config.NumberColumn(label, format="%d", width=72)
+    for col, label in (("Lifetime rating", "Lifetime ★"), ("Shrunk rating", "Shrunk ★")):
+        config[col] = st.column_config.NumberColumn(label, format="%.2f", width=78)
+    for col, label in (("On-time adj %", "On-time %"), ("Severe %", "Severe %"), ("Logged %", "Logged %")):
+        config[col] = st.column_config.NumberColumn(label, format="%.1f", width=78)
+    for col in COMPONENT_COLUMNS:
+        config[col] = st.column_config.NumberColumn(col, format="%.1f", width=85)
     overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
     for tier_label, colour in (("Tier 1", "red"), ("Tier 2", None)):         # Tier 1 red, Tier 2 black
         section = view[view["Recommended"] == tier_label].reset_index(drop=True)
