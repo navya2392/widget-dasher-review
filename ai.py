@@ -1,7 +1,7 @@
 """ai.py — the two AI edges of the pipeline. Everything else is deterministic (pipeline.py).
 
-    qa_summary(profile)                      -> str | None
-    briefing(scorecard_df, prior_df=None)    -> str | None
+    qa_summary(profile)                                  -> str | None
+    briefing(scorecard_df, prior_df=None, qa_note=None)  -> str | None
 
 System prompts come from prompts/qa_system.md and prompts/briefing_system.md — never inline.
 The API key is read from .env (python-dotenv). Any failure — missing key, network, API error,
@@ -19,7 +19,8 @@ from dotenv import load_dotenv
 import pipeline
 
 MODEL = "claude-sonnet-5-5"          # current Sonnet (human's choice, 2026-11-02)
-MAX_TOKENS = 1000                    # both outputs truncated at 800 on the 2026-11-03 run; 1000 is untested
+MAX_TOKENS_QA = 1500                 # the QA report is long and must reach its VERDICT line (cut far short of it at 800)
+MAX_TOKENS_BRIEFING = 1000           # the briefing was cut inside its near-threshold list at 800
 PROMPTS_DIR = Path(__file__).with_name("prompts")
 QA_PROMPT = PROMPTS_DIR / "qa_system.md"
 BRIEFING_PROMPT = PROMPTS_DIR / "briefing_system.md"
@@ -33,7 +34,7 @@ def _compact(obj) -> str:
     return json.dumps(obj, default=str, separators=(",", ":"), ensure_ascii=False)
 
 
-def _call(system_file: Path, user_text: str) -> str | None:
+def _call(system_file: Path, user_text: str, max_tokens: int) -> str | None:
     """One Messages API call. Returns the text, or None on any failure (missing key included)."""
     global last_error
     last_error = None
@@ -46,8 +47,8 @@ def _call(system_file: Path, user_text: str) -> str | None:
         client = anthropic.Anthropic()
         response = client.messages.create(
             model=MODEL,
-            max_tokens=MAX_TOKENS,
-            # Sonnet 5.5 thinks adaptively by default and would spend the small max_tokens budget on thinking
+            max_tokens=max_tokens,
+            # Sonnet 5.5 thinks adaptively by default and would spend a small max_tokens budget on thinking
             # before writing any text; "between_tools" switches thinking off for a plain (no-tool) request.
             thinking={"type": "between_tools"},
             system=system_file.read_text(encoding="utf-8"),
@@ -73,7 +74,7 @@ def qa_summary(profile: dict) -> str | None:
     """Severity-classified QA report with a VERDICT line, from the deterministic profile only."""
     payload = {"profile": profile, "expected_schema_columns": pipeline.EXPECTED_COLUMNS,
                "standing_exclusions": pipeline.EXCLUDED_COLUMNS}
-    return _call(QA_PROMPT, "Data profile (JSON):\n" + _compact(payload))
+    return _call(QA_PROMPT, "Data profile (JSON):\n" + _compact(payload), MAX_TOKENS_QA)
 
 
 # ----------------------------------------------------------------------------- briefing
@@ -113,4 +114,4 @@ def _briefing_payload(scorecard, prior, qa_note):
 def briefing(scorecard_df, prior_df=None, qa_note: str | None = None) -> str | None:
     """Weekly ops briefing. Tier changes are phrased as recommendations pending human approval (prompt rule)."""
     payload = _briefing_payload(scorecard_df, prior_df, qa_note)
-    return _call(BRIEFING_PROMPT, "Briefing input (JSON, all numbers precomputed):\n" + _compact(payload))
+    return _call(BRIEFING_PROMPT, "Briefing input (JSON, all numbers precomputed):\n" + _compact(payload), MAX_TOKENS_BRIEFING)

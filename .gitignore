@@ -7,3 +7,4 @@ export_*.xlsx
 .DS_Store
 analysis_report*.pdf
 approved_tiers.csv
+approved_overrides.csv

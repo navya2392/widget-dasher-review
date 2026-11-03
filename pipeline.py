@@ -298,6 +298,30 @@ def diff(scorecard: pd.DataFrame, prior: pd.DataFrame | None, movers: int = 5) -
     return out
 
 
+# ----------------------------------------------------------------------------- approval bookkeeping
+TIER_OPTIONS = ["Tier 1", "Tier 2", "Excluded"]   # what an operator may set a gate-passer to before approving
+
+
+def approval_records(edited: pd.DataFrame, approved_at: str, approved_by: str = "operator") -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Turn the operator's edited scorecard view into (approved, overrides). Deterministic; no AI involved.
+
+    `edited` has one row per gate-passer with columns MARKET_NAME, Dasher, Score, Recommended (pipeline tier) and
+    Tier (operator's choice, one of TIER_OPTIONS). Every row lands in `approved`; rows whose Tier differs from
+    Recommended also land in `overrides`, so every decision is recorded with both values and the timestamp."""
+    bad = set(edited["Tier"]) - set(TIER_OPTIONS)
+    assert not bad, f"unknown tier values: {bad}"
+    approved = pd.DataFrame({
+        "MARKET_NAME": edited["MARKET_NAME"].values, "DASHER": edited["Dasher"].values,
+        "selection_score": edited["Score"].values, "recommended_tier": edited["Recommended"].values,
+        "approved_tier": edited["Tier"].values,
+    })
+    approved["override"] = approved["approved_tier"] != approved["recommended_tier"]
+    approved["approved_at"] = approved_at
+    approved["approved_by"] = approved_by
+    overrides = approved[approved["override"]].drop(columns="override").reset_index(drop=True)
+    return approved, overrides
+
+
 # ----------------------------------------------------------------------------- run
 def run_raw(raw: pd.DataFrame) -> dict:
     """Raw frame in (already read from a workbook), {"scorecard", "cleaning_log", "profile"} out. No AI, no side effects."""

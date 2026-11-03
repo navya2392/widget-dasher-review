@@ -18,5 +18,10 @@ Hard constraints:
 - Tier changes are recommendations pending human approval — phrase them as such.
 - Do not state counts (Dashers, gate-passers, tier sizes, number of changes); the table above
   the briefing shows them — refer to "the table above".
+- The Summary section must contain NO numerals of any kind — no counts, scores, deltas, or
+  thresholds, not even spelled-out numbers. It describes direction and names only, e.g. "tier
+  changes in both markets; the biggest mover is Bret in Dashattan, driven by reliability", and
+  defers every number to the app's tables. Numbers remain allowed in the per-Dasher detail
+  sections, each tracing to an input field.
 
 Tone: plain, specific, no filler. Written for an ops manager who has five minutes.

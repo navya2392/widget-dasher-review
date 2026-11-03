@@ -2,7 +2,8 @@
 
 No logic lives here: pipeline.py computes, ai.py interprets and explains, a human approves.
 Every count, tier size and tier-change list on screen is rendered from pipeline output; the AI
-text is commentary shown below those numbers, never their source.
+text is commentary shown below those numbers, never their source. The operator may override any
+gate-passer's tier before approving; every override is recorded next to the recommendation.
 
 Run:  streamlit run app.py
 """
@@ -19,8 +20,13 @@ import pipeline
 DEMO_XLSX = Path("data/2026_Platform_Ops_Widget_Data.xlsx")
 DEMO_PRIOR = Path("demo/prior_scorecard.csv")
 APPROVED_PATH = Path("approved_tiers.csv")
-SCORECARD_VIEW = ["DASHER", "asap_n", "ontime_adj", "shrunk_rating", "severe_late_rate", "arrival_logged",
-                  "pts_reliability", "pts_quality", "pts_consistency", "pts_professionalism", "selection_score", "tier", "fraud_review"]
+OVERRIDES_PATH = Path("approved_overrides.csv")
+MARKETS = list(pipeline.TIER1_SIZE)
+COMPACT_COLUMNS = ["Dasher", "Score", "Recommended", "Tier", "Review"]
+COMPONENT_COLUMNS = {"Reliability /50": "pts_reliability", "Quality /30": "pts_quality",
+                     "Consistency /10": "pts_consistency", "Professionalism /10": "pts_professionalism"}
+INPUT_COLUMNS = {"On-time adj %": ("ontime_adj", 100), "Rating": ("shrunk_rating", 1),
+                 "Severe %": ("severe_late_rate", 100), "Logged %": ("arrival_logged", 100)}
 
 
 def ensure_api_key() -> None:
@@ -44,9 +50,14 @@ def run_everything(raw: pd.DataFrame, prior: pd.DataFrame | None, source: str) -
     briefing = briefing_error = None
     diff = pipeline.diff(result["scorecard"], prior)
     if prior is not None:
-        qa_note = qa.splitlines()[-1] if qa else None
+        verdict = [line for line in (qa or "").splitlines() if "VERDICT" in line]
+        qa_note = verdict[-1] if verdict else ("QA report truncated before its verdict" if qa else None)
         briefing = ai.briefing(result["scorecard"], prior, qa_note=qa_note)
         briefing_error = ai.last_error
+    for market in MARKETS:                       # a new run resets any operator overrides
+        st.session_state.pop(f"tier_override_{market}", None)
+        st.session_state.pop(f"edited_{market}", None)
+    st.session_state.pop("approved", None)
     return {**result, "prior": prior, "diff": diff, "qa": qa, "qa_error": qa_error,
             "briefing": briefing, "briefing_error": briefing_error, "source": source,
             "ran_at": dt.datetime.now().isoformat(timespec="seconds")}
@@ -73,16 +84,73 @@ def profile_facts(p: dict) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["fact", "value"]).set_index("fact")
 
 
-def highlight_tier1(row):
-    return ["background-color: #d9f2d9" if row["tier"] == "Tier 1" else "" for _ in row]
-
-
 def ai_panel(label: str, text: str | None, error: str | None) -> None:
     with st.expander(label):
         if text:
             st.markdown(text)
         else:
             st.warning(f"AI unavailable — pipeline results below. ({error})")
+
+
+def scorecard_view(scorecard: pd.DataFrame, market: str, show_components: bool) -> pd.DataFrame:
+    """Friendly-named view of one market's gate-passers; Tier starts from the recommendation or the operator's edit."""
+    passers = (scorecard[(scorecard["MARKET_NAME"] == market) & scorecard["passes_gates"]]
+               .sort_values("selection_score", ascending=False))
+    overrides = st.session_state.get(f"tier_override_{market}", {})
+    view = pd.DataFrame({
+        "Dasher": passers["DASHER"].values,
+        "Score": passers["selection_score"].round(1).values,
+        "Recommended": passers["tier"].values,
+        "Tier": [overrides.get(d, t) for d, t in zip(passers["DASHER"], passers["tier"])],
+        "Review": ["✓" if f else "" for f in passers["fraud_review"]],
+    })
+    if show_components:
+        for label, col in COMPONENT_COLUMNS.items():
+            view[label] = passers[col].round(1).values
+        for label, (col, mult) in INPUT_COLUMNS.items():
+            view[label] = (passers[col] * mult).round(1).values
+    return view
+
+
+def render_market(scorecard: pd.DataFrame, market: str) -> None:
+    st.subheader(market)
+    passers = scorecard[(scorecard["MARKET_NAME"] == market) & scorecard["passes_gates"]]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Gate-passers", int(len(passers)))
+    m2.metric("Tier 1", int((passers["tier"] == "Tier 1").sum()))
+    m3.metric("Fraud reviews", int(passers["fraud_review"].sum()))
+    show = st.session_state.get(f"components_{market}", False)
+    view = scorecard_view(scorecard, market, show)
+    config = {
+        "Dasher": st.column_config.TextColumn("Dasher"),
+        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
+        "Recommended": st.column_config.TextColumn("Recommended", help="Pipeline tier (read-only)"),
+        "Tier": st.column_config.SelectboxColumn("Tier", options=pipeline.TIER_OPTIONS, required=True,
+                                                 help="Operator's decision — change to override"),
+        "Review": st.column_config.TextColumn("Review", help="✓ = fraud flag in sample, manual review"),
+    }
+    for label in list(COMPONENT_COLUMNS) + list(INPUT_COLUMNS):
+        config[label] = st.column_config.NumberColumn(label, format="%.1f")
+    edited = st.data_editor(view, column_config=config, disabled=[c for c in view.columns if c != "Tier"],
+                            hide_index=True, use_container_width=True,
+                            height=35 * (len(view) + 1) + 3,          # show every gate-passer without an inner scrollbar
+                            key=f"editor_{market}_{'full' if show else 'compact'}")
+    st.session_state[f"tier_override_{market}"] = dict(zip(edited["Dasher"], edited["Tier"]))
+    st.session_state[f"edited_{market}"] = edited[COMPACT_COLUMNS].assign(MARKET_NAME=market)
+    st.toggle("Show score components", key=f"components_{market}")
+
+
+def approve(source: str) -> None:
+    stamp = dt.datetime.now().isoformat(timespec="seconds")
+    frames = [st.session_state[f"edited_{m}"] for m in MARKETS if f"edited_{m}" in st.session_state]
+    approved, overrides = pipeline.approval_records(pd.concat(frames, ignore_index=True), stamp, "operator")
+    with APPROVED_PATH.open("w", encoding="utf-8", newline="") as fh:
+        fh.write(f"# approved by operator at {stamp}; source {source}; overrides {len(overrides)}\n")
+        approved.to_csv(fh, index=False)
+    with OVERRIDES_PATH.open("w", encoding="utf-8", newline="") as fh:
+        fh.write(f"# operator overrides at {stamp}; source {source}\n")
+        overrides.to_csv(fh, index=False)
+    st.session_state["approved"] = (stamp, len(approved), len(overrides))
 
 
 # ----------------------------------------------------------------------------- page
@@ -108,61 +176,53 @@ if run is None:
     st.stop()
 
 st.caption(f"Source: {run['source']} · ran {run['ran_at']}")
+scorecard = run["scorecard"]
+tab_score, tab_data, tab_changes = st.tabs(["Scorecard", "Data check", "Changes vs prior run"])
+
+# ----------------------------------------------------------------------------- scorecard (first)
+with tab_score:
+    left, right = st.columns(2)
+    with left:
+        render_market(scorecard, "Dashattan")
+        cohort = pipeline.bike_cohort(scorecard)
+        cohort = cohort[cohort["MARKET_NAME"] == "Dashattan"]
+        if len(cohort):
+            with st.expander("Conditional bike cohort — Dashattan (display only; fails only the vehicle gate)"):
+                st.dataframe(cohort[["DASHER", "vehicles", "lifetime_deliveries", "asap_n", "ontime_adj", "shrunk_rating",
+                                     "selection_score", "fraud_review", "top_4"]].round(3), hide_index=True, use_container_width=True)
+    with right:
+        render_market(scorecard, "Doorlanta")
+    st.write("")
+    _, mid, _ = st.columns([2, 1, 2])
+    if mid.button("Approve tier changes", use_container_width=True):
+        approve(run["source"])
+    if "approved" in st.session_state:
+        stamp, n, m = st.session_state["approved"]
+        st.success(f"Approved {n} assignments, {m} overrides — written to {APPROVED_PATH} and {OVERRIDES_PATH} at {stamp}")
 
 # ----------------------------------------------------------------------------- data check
-st.header("Data check")
-st.table(profile_facts(run["profile"]))
-with st.expander("Cleaning log"):
-    for line in run["cleaning_log"]:
-        st.markdown(f"- {line}")
-ai_panel("AI read of the data", run["qa"], run["qa_error"])
-
-# ----------------------------------------------------------------------------- scorecard
-st.header("Scorecard")
-scorecard = run["scorecard"]
-tabs = st.tabs(list(pipeline.TIER1_SIZE))
-for tab, market in zip(tabs, pipeline.TIER1_SIZE):
-    with tab:
-        passers = (scorecard[(scorecard["MARKET_NAME"] == market) & scorecard["passes_gates"]]
-                   .sort_values("selection_score", ascending=False)[SCORECARD_VIEW].reset_index(drop=True))
-        n_t1 = int((passers["tier"] == "Tier 1").sum())
-        st.write(f"{len(passers)} gate-passers · Tier 1 = {n_t1} (top {pipeline.TIER1_SIZE[market]}) · "
-                 f"fraud review: {int(passers['fraud_review'].sum())}")
-        st.dataframe(passers.style.apply(highlight_tier1, axis=1).format(precision=3), use_container_width=True)
-        cohort = pipeline.bike_cohort(scorecard)
-        cohort = cohort[cohort["MARKET_NAME"] == market]
-        if len(cohort):
-            with st.expander(f"Conditional bike cohort — {market} (display only; fails only the vehicle gate)"):
-                st.dataframe(cohort[["DASHER", "vehicles", "lifetime_deliveries", "asap_n", "ontime_adj", "shrunk_rating",
-                                     "selection_score", "fraud_review", "top_4"]].style.format(precision=3), use_container_width=True)
+with tab_data:
+    st.table(profile_facts(run["profile"]))
+    with st.expander("Cleaning log"):
+        for line in run["cleaning_log"]:
+            st.markdown(f"- {line}")
+    ai_panel("AI read of the data", run["qa"], run["qa_error"])
 
 # ----------------------------------------------------------------------------- changes vs prior
-if run["prior"] is not None:
-    st.header("Changes vs prior run")
-    d = run["diff"]
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Gate-passers now", ", ".join(f"{k} {v}" for k, v in d["gate_passers_now"].items()))
-    m2.metric("Tier 1 now", ", ".join(f"{k} {len(v)}" for k, v in d["tier1_now"].items()))
-    m3.metric("Tier changes", len(d["tier_changes"]))
-    st.subheader("Tier changes (recommendations pending approval)")
-    st.dataframe(pd.DataFrame(d["tier_changes"]) if d["tier_changes"] else pd.DataFrame({"tier changes": ["none"]}), use_container_width=True)
-    st.subheader("Largest score movers")
-    st.dataframe(pd.DataFrame(d["score_movers"]), use_container_width=True)
-    if d["new_dashers"] or d["dropped_dashers"]:
-        st.write("New:", d["new_dashers"] or "none", " · Dropped:", d["dropped_dashers"] or "none")
-    ai_panel("AI briefing", run["briefing"], run["briefing_error"])
-
-# ----------------------------------------------------------------------------- approve
-st.header("Approve")
-if st.button("Approve tier changes"):
-    stamp = dt.datetime.now().isoformat(timespec="seconds")
-    tiers = scorecard.loc[scorecard["passes_gates"], ["MARKET_NAME", "DASHER", "selection_score", "tier", "fraud_review"]].copy()
-    tiers["approved_at"] = stamp
-    tiers["approved_by"] = "operator"
-    with APPROVED_PATH.open("w", encoding="utf-8", newline="") as fh:
-        fh.write(f"# approved by operator at {stamp}; source {run['source']}\n")
-        tiers.to_csv(fh, index=False)
-    st.session_state["approved"] = (stamp, len(tiers))
-if "approved" in st.session_state:
-    stamp, n = st.session_state["approved"]
-    st.success(f"Approved {n} tier assignments at {stamp} — written to {APPROVED_PATH}")
+with tab_changes:
+    if run["prior"] is None:
+        st.info("No prior run given (upload one, or use the demo data, which includes a labelled prior).")
+    else:
+        d = run["diff"]
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Gate-passers now", ", ".join(f"{k} {v}" for k, v in d["gate_passers_now"].items()))
+        m2.metric("Tier 1 now", ", ".join(f"{k} {len(v)}" for k, v in d["tier1_now"].items()))
+        m3.metric("Tier changes", len(d["tier_changes"]))
+        st.subheader("Tier changes (recommendations pending approval)")
+        changes = pd.DataFrame(d["tier_changes"]) if d["tier_changes"] else pd.DataFrame({"tier changes": ["none"]})
+        st.dataframe(changes.round(1), hide_index=True, use_container_width=True)
+        st.subheader("Largest score movers")
+        st.dataframe(pd.DataFrame(d["score_movers"]).round(1), hide_index=True, use_container_width=True)
+        if d["new_dashers"] or d["dropped_dashers"]:
+            st.write("New:", d["new_dashers"] or "none", " · Dropped:", d["dropped_dashers"] or "none")
+        ai_panel("AI briefing", run["briefing"], run["briefing_error"])
