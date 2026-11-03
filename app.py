@@ -30,6 +30,29 @@ INPUT_COLUMNS = {"On-time adj %": ("ontime_adj", 100), "Rating": ("shrunk_rating
                  "Severe %": ("severe_late_rate", 100), "Logged %": ("arrival_logged", 100)}
 
 
+
+COLUMN_HELP = {  # shown as a ? tooltip on each column header
+    "Dasher": "Dasher name.",
+    "Score": "0–100 selection score = 50 × adjusted on-time + 30 × shrunk rating / 5 + 10 × consistency (1 − severe-late rate / 30%) + 10 × arrival-logged share.",
+    "Recommended": "Tier assigned by the pipeline: Tier 1 = top 4 (Dashattan) / top 10 (Doorlanta) gate-passers by score; others Tier 2.",
+    "Override": "Operator's decision. Change it to override the recommended tier; every override is recorded on Approve.",
+    "Review": "'review' = at least one fraud flag in this Dasher's deliveries → manual review. Never auto-excluded.",
+    "Deliveries": "Deliveries observed in this data extract (June 1–13).",
+    "ASAP n": "ASAP (on-demand) deliveries in the extract — the sample the on-time and severe-late rates are computed on.",
+    "Lifetime deliv.": "Lifetime deliveries on the platform (NUM_DELIVERIES).",
+    "Lifetime rating": "Lifetime star rating (COMPOSITE_STAR_RATING).",
+    "Shrunk rating": "Lifetime rating pulled toward the market mean with k = 200 pseudo-deliveries: (n × star + 200 × market mean) / (n + 200). A high rating on few deliveries shrinks more.",
+    "On-time adj %": "Share of ASAP deliveries on time versus the quoted time, after forgiving merchant waits beyond 10 minutes.",
+    "Severe %": "Share of ASAP deliveries more than 15 minutes late after the wait adjustment.",
+    "Logged %": "Share of all deliveries where the Dasher logged arrival at the store (app discipline).",
+    "Vehicle": "Vehicle(s) used in the extract; car or motorcycle = widget-capable.",
+    "Failed gate(s)": "Gate(s) missed: widget-capable vehicle · lifetime deliveries ≥ 100 (Dashattan) / 300 (Doorlanta) · ASAP deliveries ≥ 5 / 10.",
+    "Reliability /50": "50 × adjusted on-time rate.",
+    "Quality /30": "30 × shrunk rating / 5.",
+    "Consistency /10": "10 × max(0, 1 − severe-late rate / 30%).",
+    "Professionalism /10": "10 × arrival-logged share.",
+}
+
 def ensure_api_key() -> None:
     """Env var (from .env via python-dotenv in ai.py) first; st.secrets as the Streamlit Cloud fallback."""
     if os.getenv("ANTHROPIC_API_KEY"):
@@ -124,7 +147,7 @@ def scorecard_view(scorecard: pd.DataFrame, market: str, show_components: bool) 
         "Score": passers["selection_score"].round(1).values,
         "Recommended": passers["tier"].values,
         "Override": [overrides.get(d, t) for d, t in zip(passers["DASHER"], passers["tier"])],
-        "Review": ["⚠️ review" if f else "" for f in passers["fraud_review"]],
+        "Review": ["review" if f else "" for f in passers["fraud_review"]],
         "Deliveries": passers["sample_deliveries"].astype(int).values,
         "ASAP n": passers["asap_n"].fillna(0).astype(int).values,
         "Lifetime deliv.": passers["lifetime_deliveries"].astype(int).values,
@@ -182,6 +205,9 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
         config[col] = st.column_config.NumberColumn(label, format="%.1f", width=78)
     for col in COMPONENT_COLUMNS:
         config[col] = st.column_config.NumberColumn(col, format="%.1f", width=85)
+    for col, text in COLUMN_HELP.items():          # ? tooltip with the definition on every header
+        if col in config:
+            config[col]["help"] = text
     overrides = dict(st.session_state.get(f"tier_override_{market}", {}))
     for tier_label, colour in (("Tier 1", "red"), ("Tier 2", None)):         # Tier 1 red, Tier 2 black
         section = view[view["Recommended"] == tier_label].reset_index(drop=True)
@@ -215,7 +241,7 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
             "Dasher": non["DASHER"].values,
             "Score": non["selection_score"].round(1).values,
             "Failed gate(s)": [failed_gates(r) for _, r in non.iterrows()],
-            "Review": ["⚠️ review" if f else "" for f in non["fraud_review"]],
+            "Review": ["review" if f else "" for f in non["fraud_review"]],
             "Deliveries": non["sample_deliveries"].astype(int).values,
             "ASAP n": non["asap_n"].fillna(0).astype(int).values,
             "Lifetime deliv.": non["lifetime_deliveries"].astype(int).values,
@@ -228,7 +254,7 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
         })
         st.markdown(f"#### ○ Did not clear gates &nbsp; <span style='color:gray;font-weight:normal'>{len(non)} Dashers · "
                     "read-only, not eligible for approval</span>", unsafe_allow_html=True)
-        non_config = dict(config); non_config["Failed gate(s)"] = st.column_config.TextColumn("Failed gate(s)", width=150)
+        non_config = dict(config); non_config["Failed gate(s)"] = st.column_config.TextColumn("Failed gate(s)", width=150, help=COLUMN_HELP["Failed gate(s)"])
         st.dataframe(non_view, column_config=non_config, hide_index=True, width="stretch", height=35 * (len(non_view) + 1) + 3)
     st.toggle("Show score components", key=f"components_{market}")
 
