@@ -37,7 +37,6 @@ COLUMN_HELP = {  # shown as a ? tooltip on each column header
     "Recommended": "Tier assigned by the pipeline: Tier 1 = top 4 (Dashattan) / top 10 (Doorlanta) gate-passers by score; others Tier 2.",
     "Override": "Operator's decision. Change it to override the recommended tier, or promote a Dasher who did not clear the gates; every override is recorded on Approve.",
     "Review": "'review' = at least one fraud flag in this Dasher's deliveries → manual review. Never auto-excluded.",
-    "Deliveries": "Deliveries observed in this data extract (June 1–13).",
     "ASAP n": "ASAP (on-demand) deliveries in the extract — the sample the on-time and severe-late rates are computed on.",
     "Lifetime deliv.": "Lifetime deliveries on the platform (NUM_DELIVERIES).",
     "Lifetime rating": "Lifetime star rating (COMPOSITE_STAR_RATING).",
@@ -151,7 +150,6 @@ def scorecard_view(scorecard: pd.DataFrame, market: str, show_components: bool) 
         "Recommended": passers["tier"].values,
         "Override": [overrides.get(d, t) for d, t in zip(passers["DASHER"], passers["tier"])],
         "Review": ["review" if f else "" for f in passers["fraud_review"]],
-        "Deliveries": passers["sample_deliveries"].astype(int).values,
         "ASAP n": passers["asap_n"].fillna(0).astype(int).values,
         "Lifetime deliv.": passers["lifetime_deliveries"].astype(int).values,
         "Lifetime rating": passers["lifetime_star"].round(2).values,
@@ -197,7 +195,6 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
         "Recommended": [t if p else "Not eligible" for t, p in zip(rows["tier"], rows["passes_gates"])],
         "Failed gate(s)": [failed_gates(r) if not r["passes_gates"] else "" for _, r in rows.iterrows()],
         "Review": ["review" if f else "" for f in rows["fraud_review"]],
-        "Deliveries": rows["sample_deliveries"].astype(int).values,
         "ASAP n": rows["asap_n"].fillna(0).astype(int).values,
         "Lifetime deliv.": rows["lifetime_deliveries"].astype(int).values,
         "Lifetime rating": rows["lifetime_star"].round(2).values,
@@ -235,7 +232,7 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
         "Vehicle": st.column_config.TextColumn("Vehicle", width=85),
         "Failed gate(s)": st.column_config.TextColumn("Failed gate(s)", width=150),
     }
-    for col, label, w in (("Deliveries", "Deliveries", 92), ("ASAP n", "ASAP deliveries", 118), ("Lifetime deliv.", "Lifetime deliveries", 132)):
+    for col, label, w in (("ASAP n", "ASAP deliveries", 118), ("Lifetime deliv.", "Lifetime deliveries", 132)):
         config[col] = st.column_config.NumberColumn(label, format="%d", width=w)
     for col, label in (("Lifetime rating", "Lifetime ★"), ("Shrunk rating", "Shrunk ★")):
         config[col] = st.column_config.NumberColumn(label, format="%.2f", width=78)
