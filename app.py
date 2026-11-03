@@ -298,6 +298,7 @@ def approve(source: str) -> None:
 
 # ----------------------------------------------------------------------------- page
 st.set_page_config(page_title="Widget Dasher Review", page_icon="📦", layout="wide")
+st.markdown("<style>.block-container{padding-top:1.5rem;padding-bottom:2rem}</style>", unsafe_allow_html=True)  # trim the empty band above the title
 st.title("📦 Widget Dasher Review")
 st.caption("AI interprets and explains; code computes; a human approves.")
 
