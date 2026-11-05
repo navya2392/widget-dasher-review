@@ -237,22 +237,24 @@ def render_market(scorecard: pd.DataFrame, market: str) -> None:
         config[col] = st.column_config.NumberColumn(label, format="%.1f", width=78)
     for col in COMPONENT_COLUMNS:
         config[col] = st.column_config.NumberColumn(col, format="%.1f", width=85)
-    for col, text in COLUMN_HELP.items():          # ? tooltip with the definition on every header
+    for col, text in COLUMN_HELP.items():          # definition tooltip on every header, with a visible marker
         if col in config:
             config[col]["help"] = text
+            config[col]["label"] = f"{config[col].get('label') or col} ⓘ"   # Streamlit shows help only on hover
+            config[col]["width"] = (config[col].get("width") or 90) + 16
     hidden = ("Recommended", "Current", "Failed gate(s)")
     order = ["Dasher", "Score", "Override", "Review"] + [c for c in full_view.columns if c not in ("Dasher", "Score", "Override", "Review", *hidden)]
 
     def editor(frame, key, options, columns):
         cfg = dict(config)
-        cfg["Override"] = st.column_config.SelectboxColumn("Override", options=options, required=True, width=90, help=COLUMN_HELP["Override"])
+        cfg["Override"] = st.column_config.SelectboxColumn("Override ⓘ", options=options, required=True, width=106, help=COLUMN_HELP["Override"])
         shown = frame[[c for c in columns if c in frame.columns]]
         edited = st.data_editor(shown, column_config=cfg, disabled=[c for c in shown.columns if c != "Override"], hide_index=True,
                                 width="stretch", height=35 * (len(shown) + 1) + 3,
                                 key=f"{key}_{'full' if show else 'compact'}_{abs(hash(tuple(shown['Dasher'])))}")
         overrides.update(zip(edited["Dasher"], edited["Override"]))
 
-    st.caption("Override column is editable — change a tier there, then Approve below.")
+    st.caption("Override column is editable — change a tier there, then Approve below. Hover the ⓘ on any column header for its definition.")
     for tier_label, colour in (("Tier 1", "red"), ("Tier 2", None), ("Excluded", "gray")):   # Tier 1 red, Tier 2 black
         section = view[view["Current"] == tier_label].reset_index(drop=True)
         if section.empty:
